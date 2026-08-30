@@ -16,48 +16,37 @@ function agentStub(env: Env) {
   return env.GitHubAgent.get(id);
 }
 
-/**
- * Forward request ke Durable Object dengan menyertakan header room/namespace
- * agar kompatibel dengan Cloudflare Agents / PartyServer SDK.
- */
-function forwardToAgent(env: Env, request: Request): Promise<Response> {
-  const headers = new Headers(request.headers);
-  if (!headers.has("x-partykit-room")) {
-    headers.set("x-partykit-room", "default");
-  }
-  if (!headers.has("x-partykit-namespace")) {
-    headers.set("x-partykit-namespace", "github-agent");
-  }
-
-  const modifiedReq = new Request(request.url, {
-    method: request.method,
-    headers,
-    body: request.body,
-    redirect: request.redirect,
-    // @ts-ignore
-    duplex: "half",
-  });
-
-  return agentStub(env).fetch(modifiedReq);
-}
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // --- Handle CORS Preflight ---
+    // 1. Handle CORS Preflight
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
-    // --- Auth API (proxied to Durable Object storage) ---
+    // 2. Auth API (diteruskan ke Durable Object)
     if (path.startsWith("/auth/")) {
-      const response = await forwardToAgent(env, request);
+      const headers = new Headers(request.headers);
+      headers.set("x-partykit-room", "default");
+      headers.set("x-partykit-namespace", "github-agent");
+
+      const modifiedReq = new Request(request.url, {
+        method: request.method,
+        headers,
+        body: request.body,
+        redirect: request.redirect,
+        // @ts-ignore
+        duplex: "half",
+      });
+
+      const response = await agentStub(env).fetch(modifiedReq);
       const responseHeaders = new Headers(response.headers);
       Object.entries(corsHeaders).forEach(([k, v]) => {
         responseHeaders.set(k, v as string);
       });
+
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
@@ -65,7 +54,7 @@ export default {
       });
     }
 
-    // --- WebSocket upgrade ---
+    // 3. WebSocket Upgrade
     const isWebSocket =
       request.headers.get("Upgrade")?.toLowerCase() === "websocket";
 
@@ -75,8 +64,12 @@ export default {
       let authenticated = false;
 
       if (bearer) {
-        const session = await verifyToken(env, bearer);
-        authenticated = !!session;
+        try {
+          const session = await verifyToken(env, bearer);
+          authenticated = !!session;
+        } catch {
+          authenticated = false;
+        }
       }
 
       const accessConfigured = !!(env.TEAM_DOMAIN && env.POLICY_AUD);
@@ -85,8 +78,8 @@ export default {
         authenticated = !!user;
       }
 
-      // Local/dev without Access secrets: allow connection
-      if (!authenticated && !accessConfigured && !bearer) {
+      // Local / Dev Fallback: jika token ada atau dev mode
+      if (!authenticated && !accessConfigured && (!env.JWT_SECRET || !bearer)) {
         authenticated = true;
       }
 
@@ -97,10 +90,11 @@ export default {
         });
       }
 
-      return forwardToAgent(env, request);
+      // Teruskan WebSocket handshaking langsung ke stub Durable Object
+      return agentStub(env).fetch(request);
     }
 
-    // --- Static assets (SPA) ---
+    // 4. Static assets (SPA)
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }
