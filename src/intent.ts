@@ -1,4 +1,8 @@
+import { tracing } from "cloudflare:workers";
 import type { Env } from "./types";
+
+const AGENT_NAME = "github-agent";
+const AGENT_ID = "github-agent-default";
 
 export type IntentType =
   | "create_repo"
@@ -390,13 +394,36 @@ Context Repo: "${context || "default/repo"}"
 OUTPUT ONLY RAW JSON:`;
 
   try {
-    const result: unknown = await env.AI.run(MODEL, {
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: trimmedMessage },
-      ],
-      max_tokens: 400,
-      temperature: 0.1,
+    const result: unknown = await tracing.enterSpan("chat", async (span) => {
+      span.setAttribute("gen_ai.operation.name", "chat");
+      span.setAttribute("gen_ai.agent.name", AGENT_NAME);
+      span.setAttribute("gen_ai.agent.id", AGENT_ID);
+      span.setAttribute("gen_ai.conversation.id", "default-session");
+      span.setAttribute("gen_ai.request.model", MODEL);
+      span.setAttribute("gen_ai.system_instructions", systemPrompt);
+      span.setAttribute(
+        "gen_ai.input.messages",
+        JSON.stringify([
+          { role: "system", content: systemPrompt },
+          { role: "user", content: trimmedMessage },
+        ])
+      );
+
+      const aiResult = await env.AI.run(MODEL, {
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: trimmedMessage },
+        ],
+        max_tokens: 400,
+        temperature: 0.1,
+      });
+
+      const out = extractText(aiResult);
+      span.setAttribute(
+        "gen_ai.output.messages",
+        JSON.stringify([{ role: "assistant", content: out }])
+      );
+      return aiResult;
     });
 
     const rawText = extractText(result);
