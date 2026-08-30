@@ -1,36 +1,58 @@
 import { GitHubAgent } from "./agent";
 import { verifyAccess } from "./auth";
+import { verifyToken, extractBearer } from "./users";
 import type { Env } from "./types";
 
 export { GitHubAgent };
 
+function agentStub(env: Env) {
+  const id = env.GitHubAgent.idFromName("default");
+  return env.GitHubAgent.get(id);
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const path = url.pathname;
 
-    // Cloudflare Access authentication
+    // --- Auth API (proxied to Durable Object storage) ---
+    if (path.startsWith("/auth/")) {
+      return agentStub(env).fetch(request);
+    }
+
+    // --- WebSocket upgrade ---
     const isWebSocket =
-  request.headers.get("Upgrade")?.toLowerCase() === "websocket";
-    const skipAuth = !env.TEAM_DOMAIN || !env.POLICY_AUD;
+      request.headers.get("Upgrade")?.toLowerCase() === "websocket";
 
-    if (!skipAuth) {
-      const user = await verifyAccess(request, env);
-      if (!user) {
-        return new Response("Unauthorized. Cloudflare Access authentication required.", {
-          status: 401,
-          headers: { "Content-Type": "text/plain" },
-        });
-      }
-    }
-
-    // WebSocket upgrade for the agent
     if (isWebSocket) {
-      const id = env.GitHubAgent.idFromName("default");
-      const stub = env.GitHubAgent.get(id);
-      return stub.fetch(request);
+      const bearer =
+        extractBearer(request) || url.searchParams.get("token") || null;
+      let authenticated = false;
+
+      if (bearer) {
+        const session = await verifyToken(env, bearer);
+        authenticated = !!session;
+      }
+
+      const accessConfigured = !!(env.TEAM_DOMAIN && env.POLICY_AUD);
+      if (!authenticated && accessConfigured) {
+        const user = await verifyAccess(request, env);
+        authenticated = !!user;
+      }
+
+      // Local/dev without Access secrets: allow connection
+      if (!authenticated && !accessConfigured && !bearer) {
+        authenticated = true;
+      }
+
+      if (!authenticated) {
+        return new Response("Unauthorized — login required", { status: 401 });
+      }
+
+      return agentStub(env).fetch(request);
     }
 
-    // Serve static UI
+    // --- Static assets (SPA) ---
     return env.ASSETS.fetch(request);
   },
 } satisfies ExportedHandler<Env>;
