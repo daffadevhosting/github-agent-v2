@@ -3,6 +3,7 @@ import { verifyAccess } from "./auth";
 import { verifyToken, extractBearer } from "./users";
 import type { Env } from "./types";
 
+// Wajib diexport agar Cloudflare runtime mengenali Durable Object
 export { GitHubAgent };
 
 const corsHeaders: HeadersInit = {
@@ -26,7 +27,7 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
-    // 2. Auth API (diteruskan ke Durable Object)
+    // 2. Auth API (diteruskan langsung ke Durable Object)
     if (path.startsWith("/auth/")) {
       const headers = new Headers(request.headers);
       headers.set("x-partykit-room", "default");
@@ -55,12 +56,10 @@ export default {
     }
 
     // 3. WebSocket Upgrade
-    const isWebSocket =
-      request.headers.get("Upgrade")?.toLowerCase() === "websocket";
+    const isWebSocket = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
 
     if (isWebSocket) {
-      const bearer =
-        extractBearer(request) || url.searchParams.get("token") || null;
+      const bearer = extractBearer(request) || url.searchParams.get("token") || null;
       let authenticated = false;
 
       if (bearer) {
@@ -78,7 +77,7 @@ export default {
         authenticated = !!user;
       }
 
-      // Local / Dev Fallback: jika token ada atau dev mode
+      // Fallback dev mode jika Access belum disetup atau token valid
       if (!authenticated && !accessConfigured && (!env.JWT_SECRET || !bearer)) {
         authenticated = true;
       }
@@ -90,11 +89,11 @@ export default {
         });
       }
 
-      // Teruskan WebSocket handshaking langsung ke stub Durable Object
+      // Teruskan koneksi WebSocket ke Durable Object
       return agentStub(env).fetch(request);
     }
 
-    // 4. Static assets (SPA)
+    // 4. Static Assets (SPA)
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }
