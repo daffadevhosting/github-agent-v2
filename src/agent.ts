@@ -18,9 +18,6 @@ interface AgentState {
 }
 
 const MODEL = "@cf/openai/gpt-oss-120b";
-
-// const MODEL = "@cf/zai-org/glm-5.2";
-
 const AGENT_NAME = "github-agent";
 const AGENT_ID = "github-agent-default";
 const USERS_KEY = "users_v1";
@@ -52,6 +49,18 @@ export class GitHubAgent extends Agent<Env> {
   constructor(ctx: any, env: Env) {
     super(ctx, env);
     this.setState({ currentRepo: "", currentBranch: "agent" });
+  }
+
+  /**
+   * Override fetch() untuk mencegah library melempar error missing headers
+   * ketika dipanggil langsung dari agentStub(env).fetch(request).
+   */
+  async fetch(request: Request): Promise<Response> {
+    const isWebSocket = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
+    if (isWebSocket) {
+      return super.fetch(request);
+    }
+    return this.onRequest(request);
   }
 
   /** HTTP auth endpoints */
@@ -176,7 +185,6 @@ export class GitHubAgent extends Agent<Env> {
     const text: string = typeof data === "string" ? data : data?.message || "";
     if (!text.trim()) return;
 
-    // Conversation ID: single DO instance, use a stable session key
     const conversationId = "default-session";
 
     await tracing.enterSpan("invoke_agent", async (span) => {
@@ -202,7 +210,6 @@ export class GitHubAgent extends Agent<Env> {
     ws.send(JSON.stringify(data));
   }
 
-  /** Traced Workers AI call (chat span) — records payloads per user choice */
   private async tracedAI(
     messages: { role: string; content: string }[],
     options: { max_tokens?: number; temperature?: number } = {},
@@ -215,7 +222,6 @@ export class GitHubAgent extends Agent<Env> {
       span.setAttribute("gen_ai.conversation.id", conversationId);
       span.setAttribute("gen_ai.request.model", MODEL);
 
-      // Payload recording (user selected option 2)
       const systemMsg = messages.find((m) => m.role === "system");
       if (systemMsg) {
         span.setAttribute("gen_ai.system_instructions", systemMsg.content);
@@ -238,7 +244,6 @@ export class GitHubAgent extends Agent<Env> {
     });
   }
 
-  /** Traced tool execution (execute_tool span) — records args/results */
   private async tracedTool<T>(
     toolName: string,
     args: Record<string, unknown>,
@@ -255,10 +260,7 @@ export class GitHubAgent extends Agent<Env> {
 
       const result = await fn();
       try {
-        span.setAttribute(
-          "gen_ai.tool.call.result",
-          JSON.stringify(result).slice(0, 8000)
-        );
+        span.setAttribute("gen_ai.tool.call.result", JSON.stringify(result).slice(0, 8000));
       } catch {
         span.setAttribute("gen_ai.tool.call.result", String(result).slice(0, 8000));
       }
@@ -280,7 +282,6 @@ export class GitHubAgent extends Agent<Env> {
       case "help":
         return this.helpText();
 
-      // Repo
       case "create_repo": {
         const name = intent.params.name;
         const isPrivate = intent.params.isPrivate || false;
@@ -295,7 +296,6 @@ export class GitHubAgent extends Agent<Env> {
         return `✅ Repo "${name}" dibuat${isPrivate ? " (private)" : ""}.\nURL: ${created.html_url}`;
       }
 
-      // Branch
       case "create_branch": {
         const br = intent.params.branch;
         const from = intent.params.from || "main";
@@ -328,7 +328,6 @@ export class GitHubAgent extends Agent<Env> {
         return `✅ Active branch diatur ke "${from}".`;
       }
 
-      // Files
       case "list_files": {
         const ref = intent.params.ref || this.state.currentBranch;
         const files = await this.tracedTool(
@@ -434,7 +433,6 @@ export class GitHubAgent extends Agent<Env> {
         return `✅ File "${path}" dihapus dari branch "${branch}".`;
       }
 
-      // Pull Requests
       case "create_pr": {
         const title = intent.params.title || rawText.slice(0, 72);
         const head = intent.params.head || this.state.currentBranch;
@@ -476,7 +474,6 @@ export class GitHubAgent extends Agent<Env> {
         return `✅ PR #${number} di-merge dengan method "${method}" di ${owner}/${repo}.`;
       }
 
-      // Issues
       case "create_issue": {
         const title = intent.params.title || rawText.slice(0, 72);
         const body = intent.params.body || rawText;
@@ -529,7 +526,6 @@ export class GitHubAgent extends Agent<Env> {
         return `✅ Komentar ditambahkan ke issue #${number}.\n${comment.html_url}`;
       }
 
-      // Code Review
       case "review_code": {
         const prNumber = intent.params.prNumber;
         const filePath = intent.params.path;
@@ -560,7 +556,6 @@ export class GitHubAgent extends Agent<Env> {
         return review;
       }
 
-      // Chat fallback
       case "chat":
       default: {
         const reply = await this.tracedAI(
