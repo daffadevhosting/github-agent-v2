@@ -52,8 +52,9 @@ export class GitHubAgent extends Agent<Env> {
   }
 
   /**
-   * Override fetch() untuk mencegah library melempar error missing headers
-   * ketika dipanggil langsung dari agentStub(env).fetch(request).
+   * Menangani request masuk ke Durable Object.
+   * Memastikan request HTTP langsung dieksekusi di onRequest()
+   * dan WebSocket diteruskan ke handler bawaan Agent.
    */
   async fetch(request: Request): Promise<Response> {
     const isWebSocket = request.headers.get("Upgrade")?.toLowerCase() === "websocket";
@@ -63,7 +64,7 @@ export class GitHubAgent extends Agent<Env> {
     return this.onRequest(request);
   }
 
-  /** HTTP auth endpoints */
+  /** HTTP Auth Endpoints */
   async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
