@@ -1,0 +1,44 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "github-agent",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-17",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS"
+  },
+
+  "ai": {
+    "binding": "AI"
+  },
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GitHubAgent",
+        "class_name": "GitHubAgent"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["GitHubAgent"]
+    }
+  ],
+
+  "observability": {
+    "enabled": true,
+    "traces": { "enabled": true }
+  },
+
+  "access": {
+    "dev": {
+      "aud": "github-agent-local",
+      "identity": { "email": "admin@agent.com" }
+    }
+  }
+}
