@@ -6,6 +6,7 @@ export interface Env {
   GITHUB_OWNER: string;
   TEAM_DOMAIN: string;
   POLICY_AUD: string;
+  AUTH_SECRET?: string;
 }
 
 export interface AgentState {
