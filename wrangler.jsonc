@@ -25,6 +25,17 @@
     }
   ],
 
+ "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["GitHubAgent"]
+    },
+    {
+      "tag": "v2",
+      "deleted_classes": ["GitHubAgent"]
+    }
+  ],
+
   // Observabilitas & Tracing Cloudflare
   "observability": {
     "enabled": true,
