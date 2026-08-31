@@ -1611,7 +1611,7 @@
     async function openRepoExplorer(repo) {
       selectedRepo = repo;
       activeRepoName.textContent = repo.full_name || repo.name;
-      activeRepoBranch.textContent = repo.default_branch || 'main';
+      activeRepoBranch.textContent = repo.default_branch || 'master';
 
       sidebarReposView.style.display = "none";
       sidebarFilesView.classList.add("active");
@@ -1625,7 +1625,7 @@
 
       try {
         const owner = repo.owner || repo.full_name?.split('/')[0] || currentUser?.githubUsername;
-        const res = await apiRequest(`/api/repos/${owner}/${repo.name}/tree?branch=${repo.default_branch || 'main'}`);
+        const res = await apiRequest(`/api/repos/${owner}/${repo.name}/tree?branch=${repo.default_branch || 'master'}`);
         repo.files = res.files || [];
         renderFileTree(repo.files);
       } catch (err) {
