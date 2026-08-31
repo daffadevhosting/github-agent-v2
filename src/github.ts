@@ -57,9 +57,9 @@ export async function getDefaultBranch(
 ): Promise<string> {
   try {
     const repoInfo = await ghFetch(token, `/repos/${owner}/${repo}`);
-    return repoInfo.default_branch || "main";
+    return repoInfo.default_branch || "github-agent";
   } catch {
-    return "main";
+    return "github-agent";
   }
 }
 
