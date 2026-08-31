@@ -5,7 +5,17 @@ import type { UserRecord, AgentState } from "./types";
  */
 export async function getUserByEmail(db: D1Database, email: string): Promise<UserRecord | null> {
   const row = await db
-    .prepare("SELECT id, email, name, password_hash as passwordHash, salt, created_at as createdAt FROM users WHERE email = ?")
+    .prepare(
+      `SELECT id, email, name, 
+              github_username as githubUsername, 
+              github_token as githubToken, 
+              avatar_url as avatarUrl, 
+              password_hash as passwordHash, 
+              salt, 
+              created_at as createdAt, 
+              updated_at as updatedAt 
+       FROM users WHERE email = ?`
+    )
     .bind(email.toLowerCase())
     .first<UserRecord>();
 
@@ -13,24 +23,90 @@ export async function getUserByEmail(db: D1Database, email: string): Promise<Use
 }
 
 /**
- * Mendaftarkan pengguna baru ke database D1
+ * Mendaftarkan atau memperbarui pengguna yang login via GitHub OAuth
  */
-export async function createUser(
+export async function upsertGitHubUser(
   db: D1Database,
-  user: { email: string; name: string; passwordHash: string; salt: string }
+  data: {
+    email: string;
+    name: string;
+    githubUsername: string;
+    githubToken: string;
+    avatarUrl?: string;
+  }
 ): Promise<UserRecord> {
-  const id = crypto.randomUUID();
-  const createdAt = Date.now();
-  const emailNorm = user.email.toLowerCase();
+  const now = Date.now();
+  const emailNorm = data.email.toLowerCase();
+  const existing = await getUserByEmail(db, emailNorm);
 
+  if (existing) {
+    await db
+      .prepare(
+        `UPDATE users 
+         SET name = ?, github_username = ?, github_token = ?, avatar_url = ?, updated_at = ? 
+         WHERE email = ?`
+      )
+      .bind(data.name, data.githubUsername, data.githubToken, data.avatarUrl || null, now, emailNorm)
+      .run();
+
+    return {
+      ...existing,
+      name: data.name,
+      githubUsername: data.githubUsername,
+      githubToken: data.githubToken,
+      avatarUrl: data.avatarUrl || null,
+      updatedAt: now,
+    };
+  }
+
+  const id = crypto.randomUUID();
   await db
-    .prepare("INSERT INTO users (id, email, name, password_hash, salt, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(id, emailNorm, user.name, user.passwordHash, user.salt, createdAt)
+    .prepare(
+      `INSERT INTO users (id, email, name, github_username, github_token, avatar_url, password_hash, salt, created_at, updated_at) 
+       VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`
+    )
+    .bind(id, emailNorm, data.name, data.githubUsername, data.githubToken, data.avatarUrl || null, now, now)
     .run();
 
   await db
     .prepare("INSERT OR REPLACE INTO user_states (email, current_repo, current_branch, updated_at) VALUES (?, '', 'main', ?)")
-    .bind(emailNorm, createdAt)
+    .bind(emailNorm, now)
+    .run();
+
+  return {
+    id,
+    email: emailNorm,
+    name: data.name,
+    githubUsername: data.githubUsername,
+    githubToken: data.githubToken,
+    avatarUrl: data.avatarUrl || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/**
+ * Pendaftaran akun manual (email & password)
+ */
+export async function createManualUser(
+  db: D1Database,
+  user: { email: string; name: string; passwordHash: string; salt: string }
+): Promise<UserRecord> {
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  const emailNorm = user.email.toLowerCase();
+
+  await db
+    .prepare(
+      `INSERT INTO users (id, email, name, github_username, github_token, avatar_url, password_hash, salt, created_at, updated_at) 
+       VALUES (?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`
+    )
+    .bind(id, emailNorm, user.name, user.passwordHash, user.salt, now, now)
+    .run();
+
+  await db
+    .prepare("INSERT OR REPLACE INTO user_states (email, current_repo, current_branch, updated_at) VALUES (?, '', 'main', ?)")
+    .bind(emailNorm, now)
     .run();
 
   return {
@@ -39,12 +115,13 @@ export async function createUser(
     name: user.name,
     passwordHash: user.passwordHash,
     salt: user.salt,
-    createdAt,
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
 /**
- * Mengambil status repositori dan branch aktif pengguna
+ * Mengambil status repositori dan branch aktif
  */
 export async function getUserState(db: D1Database, email: string): Promise<AgentState> {
   const row = await db
@@ -59,7 +136,7 @@ export async function getUserState(db: D1Database, email: string): Promise<Agent
 }
 
 /**
- * Menyimpan pembaruan status repositori / branch aktif
+ * Menyimpan status repositori dan branch aktif
  */
 export async function saveUserState(
   db: D1Database,
@@ -71,7 +148,14 @@ export async function saveUserState(
   const updatedBranch = state.currentBranch !== undefined ? state.currentBranch : current.currentBranch;
 
   await db
-    .prepare("INSERT INTO user_states (email, current_repo, current_branch, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(email) DO UPDATE SET current_repo = excluded.current_repo, current_branch = excluded.current_branch, updated_at = excluded.updated_at")
+    .prepare(
+      `INSERT INTO user_states (email, current_repo, current_branch, updated_at) 
+       VALUES (?, ?, ?, ?) 
+       ON CONFLICT(email) DO UPDATE SET 
+         current_repo = excluded.current_repo, 
+         current_branch = excluded.current_branch, 
+         updated_at = excluded.updated_at`
+    )
     .bind(email.toLowerCase(), updatedRepo, updatedBranch, Date.now())
     .run();
 
@@ -79,7 +163,7 @@ export async function saveUserState(
 }
 
 /**
- * Mencatat riwayat pesan untuk audit
+ * Mencatat log riwayat percakapan
  */
 export async function logChatMessage(
   db: D1Database,
@@ -93,6 +177,6 @@ export async function logChatMessage(
       .bind(crypto.randomUUID(), email.toLowerCase(), role, message, Date.now())
       .run();
   } catch (err) {
-    console.warn("Gagal menyimpan log chat:", err);
+    console.warn("Gagal menyimpan chat log:", err);
   }
 }
