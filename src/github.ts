@@ -29,6 +29,29 @@ async function ghFetch(token: string, path: string, options: RequestInit = {}): 
 }
 
 /**
+ * Mengambil default branch asli dari repositori (misal: main, master, dev)
+ */
+export async function getDefaultBranch(token: string, owner: string, repo: string): Promise<string> {
+  try {
+    const repoData = await ghFetch(token, `/repos/${owner}/${repo}`);
+    return repoData.default_branch || "main";
+  } catch {
+    return "main";
+  }
+}
+
+/**
+ * Memformat nama branch agar memiliki prefix brand agen jika dibuat via webapp
+ */
+export function formatAgentBranchName(branchName: string): string {
+  const cleaned = branchName.trim().toLowerCase().replace(/[^a-z0-9._/-]/g, "-");
+  if (cleaned.startsWith("github-agent/")) {
+    return cleaned;
+  }
+  return `github-agent/${cleaned}`;
+}
+
+/**
  * Mengambil seluruh repositori milik pengguna yang sedang login
  */
 export async function listUserRepositories(token: string): Promise<any[]> {
@@ -48,41 +71,7 @@ export async function listUserRepositories(token: string): Promise<any[]> {
 }
 
 /**
- * Mengambil default branch dari repositori secara dinamis
- */
-export async function getDefaultBranch(
-  token: string,
-  owner: string,
-  repo: string
-): Promise<string> {
-  try {
-    const repoInfo = await ghFetch(token, `/repos/${owner}/${repo}`);
-    return repoInfo.default_branch || "github-agent";
-  } catch {
-    return "github-agent";
-  }
-}
-
-/**
- * Format nama branch dengan brand agen jika dibuat dari WebApp/Agent
- */
-export function formatAgentBranchName(name?: string): string {
-  const sanitize = (name || "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\-_/]/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  const timestamp = Date.now().toString(36);
-  const branchSlug = sanitize || `patch-${timestamp}`;
-
-  return branchSlug.startsWith("github-agent/")
-    ? branchSlug
-    : `github-agent/${branchSlug}`;
-}
-
-/**
- * Mengambil struktur pohon berkas (file tree) lengkap dari repositori secara dinamis
+ * Mengambil file tree repositori dengan branch dinamis (jika branch tidak diisi, otomatis pakai default branch)
  */
 export async function getRepoTree(
   token: string,
@@ -91,10 +80,8 @@ export async function getRepoTree(
   branch?: string
 ): Promise<{ path: string; name: string; type: string; lang: string }[]> {
   try {
-    // Jika branch tidak diisi, ambil default_branch secara dinamis
     const targetBranch = branch || (await getDefaultBranch(token, owner, repo));
     const tree = await ghFetch(token, `/repos/${owner}/${repo}/git/trees/${targetBranch}?recursive=1`);
-    
     return (tree.tree || [])
       .filter((node: any) => node.type === "blob")
       .map((node: any) => {
@@ -121,20 +108,15 @@ export async function createRepo(token: string, name: string, isPrivate: boolean
   });
 }
 
-/**
- * Membuat branch baru dengan nama bermerek (github-agent/...) dan dari branch utama yang dinamis
- */
+// Branch dengan Branding Agent & Default Branch Dinamis
 export async function createBranch(
   token: string,
   owner: string,
   repo: string,
   branch: string,
-  from?: string
+  fromBranch?: string
 ): Promise<any> {
-  // 1. Dapatkan nama base branch secara dinamis jika tidak ditentukan
-  const baseBranch = from || (await getDefaultBranch(token, owner, repo));
-
-  // 2. Terapkan prefix brand agen pada nama branch baru
+  const baseBranch = fromBranch || (await getDefaultBranch(token, owner, repo));
   const agentBranchName = formatAgentBranchName(branch);
 
   const ref = await ghFetch(token, `/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`);
@@ -143,6 +125,184 @@ export async function createBranch(
   return ghFetch(token, `/repos/${owner}/${repo}/git/refs`, {
     method: "POST",
     body: JSON.stringify({ ref: `refs/heads/${agentBranchName}`, sha }),
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function deleteBranch(token: string, owner: string, repo: string, branch: string): Promise<any> {
+  return ghFetch(token, `/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+    method: "DELETE",
+  });
+}
+
+// File Operations (dengan Co-Authored & Bot Committer Support)
+export async function createOrUpdateFile(
+  token: string,
+  owner: string,
+  repo: string,
+  path: string,
+  content: string,
+  message: string,
+  branch?: string,
+  authorUser?: { name: string; email: string }
+): Promise<any> {
+  const targetBranch = branch || (await getDefaultBranch(token, owner, repo));
+  let sha: string | undefined;
+
+  try {
+    const existing = await ghFetch(token, `/repos/${owner}/${repo}/contents/${path}?ref=${targetBranch}`);
+    sha = existing.sha;
+  } catch {}
+
+  const encoded = btoa(unescape(encodeURIComponent(content)));
+  const commitMessage = `${message}\n\nCo-authored-by: GitHub Agent <github-agent-bot@users.noreply.github.com>`;
+
+  const payload: Record<string, any> = {
+    message: commitMessage,
+    content: encoded,
+    branch: targetBranch,
+    committer: BOT_COMMITTER,
+  };
+
+  if (authorUser && authorUser.email) {
+    payload.author = {
+      name: authorUser.name || "User",
+      email: authorUser.email,
+    };
+  }
+
+  if (sha) payload.sha = sha;
+
+  return ghFetch(token, `/repos/${owner}/${repo}/contents/${path}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function getFile(
+  token: string,
+  owner: string,
+  repo: string,
+  path: string,
+  branch?: string
+): Promise<{ content: string; sha: string }> {
+  const targetBranch = branch || (await getDefaultBranch(token, owner, repo));
+  const res = await ghFetch(token, `/repos/${owner}/${repo}/contents/${path}?ref=${targetBranch}`);
+  const raw = atob(res.content.replace(/\n/g, ""));
+  const content = decodeURIComponent(escape(raw));
+  return { content, sha: res.sha };
+}
+
+export async function deleteFile(
+  token: string,
+  owner: string,
+  repo: string,
+  path: string,
+  message: string,
+  branch?: string
+): Promise<any> {
+  const targetBranch = branch || (await getDefaultBranch(token, owner, repo));
+  const file = await getFile(token, owner, repo, path, targetBranch);
+  const commitMessage = `${message}\n\nCo-authored-by: GitHub Agent <github-agent-bot@users.noreply.github.com>`;
+
+  return ghFetch(token, `/repos/${owner}/${repo}/contents/${path}`, {
+    method: "DELETE",
+    body: JSON.stringify({
+      message: commitMessage,
+      sha: file.sha,
+      branch: targetBranch,
+      committer: BOT_COMMITTER,
+    }),
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function listFiles(
+  token: string,
+  owner: string,
+  repo: string,
+  branch?: string
+): Promise<string[]> {
+  try {
+    const targetBranch = branch || (await getDefaultBranch(token, owner, repo));
+    const tree = await ghFetch(token, `/repos/${owner}/${repo}/git/trees/${targetBranch}?recursive=1`);
+    return (tree.tree || [])
+      .filter((node: any) => node.type === "blob")
+      .map((node: any) => node.path);
+  } catch {
+    return [];
+  }
+}
+
+// Pull Request Management
+export async function createPullRequest(
+  token: string,
+  owner: string,
+  repo: string,
+  title: string,
+  head: string,
+  base?: string,
+  body = ""
+): Promise<any> {
+  const targetBase = base || (await getDefaultBranch(token, owner, repo));
+  const prBody = `${body}\n\n---\n*🤖 Dibuat secara otomatis dengan bantuan [GitHub Agent AI](https://github.com).*`;
+
+  return ghFetch(token, `/repos/${owner}/${repo}/pulls`, {
+    method: "POST",
+    body: JSON.stringify({ title, head, base: targetBase, body: prBody }),
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function listPullRequests(
+  token: string,
+  owner: string,
+  repo: string,
+  state = "open"
+): Promise<any[]> {
+  return ghFetch(token, `/repos/${owner}/${repo}/pulls?state=${state}&per_page=20`);
+}
+
+export async function mergePullRequest(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number,
+  commitMessage?: string
+): Promise<any> {
+  const payload: Record<string, any> = {};
+  if (commitMessage) payload.commit_message = commitMessage;
+  return ghFetch(token, `/repos/${owner}/${repo}/pulls/${number}/merge`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function getPullRequestFiles(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number
+): Promise<any[]> {
+  return ghFetch(token, `/repos/${owner}/${repo}/pulls/${number}/files`);
+}
+
+// Issue Management
+export async function createIssue(
+  token: string,
+  owner: string,
+  repo: string,
+  title: string,
+  body: string,
+  labels?: string[]
+): Promise<any> {
+  const payload: Record<string, any> = { title, body };
+  if (labels && labels.length > 0) payload.labels = labels;
+  return ghFetch(token, `/repos/${owner}/${repo}/issues`, {
+    method: "POST",
+    body: JSON.stringify(payload),
     headers: { "Content-Type": "application/json" },
   });
 }
