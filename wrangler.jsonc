@@ -5,40 +5,40 @@
   "compatibility_date": "2026-07-17",
   "compatibility_flags": ["nodejs_compat"],
 
+  // Static Assets Frontend (HTML/CSS/JS di folder public)
   "assets": {
     "directory": "public",
     "binding": "ASSETS"
   },
 
+  // Binding Workers AI
   "ai": {
     "binding": "AI"
   },
 
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "GitHubAgent",
-        "class_name": "GitHubAgent"
-      }
-    ]
-  },
-
-  "migrations": [
+  // Binding Cloudflare D1 Database
+  "d1_databases": [
     {
-      "tag": "v1",
-      "new_sqlite_classes": ["GitHubAgent"]
+      "binding": "DB",
+      "database_name": "github-agent-db",
+      "database_id": "c264c4ae-5169-4a86-b6cf-df4f56635e49"
     }
   ],
 
+  // Observabilitas & Tracing Cloudflare
   "observability": {
     "enabled": true,
-    "traces": { "enabled": true }
+    "traces": {
+      "enabled": true
+    }
   },
 
   "access": {
     "dev": {
       "aud": "github-agent-local",
-      "identity": { "email": "admin@agent.com" }
+      "identity": {
+        "email": "admin@agent.com"
+      }
     }
   }
 }
