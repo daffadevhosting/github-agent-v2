@@ -35,21 +35,56 @@ const MODEL = "@cf/openai/gpt-oss-120b";
 
 // const MODEL = "@cf/zai-org/glm-5.2";
 
-function extractText(result: unknown): string {
+export function extractText(result: unknown): string {
   if (!result) return "";
   if (typeof result === "string") return result;
   const res = result as Record<string, any>;
-  if (typeof res.response === "string") return res.response;
-  if (res.result && typeof res.result.response === "string") return res.result.response;
-  if (Array.isArray(res.choices) && res.choices[0]?.message?.content) {
+
+  // Classic Workers AI / Llama-style
+  if (typeof res.response === "string" && res.response.trim()) return res.response;
+  if (res.result && typeof res.result.response === "string" && res.result.response.trim()) {
+    return res.result.response;
+  }
+
+  // OpenAI Chat Completions
+  if (Array.isArray(res.choices) && res.choices[0]?.message) {
     const content = res.choices[0].message.content;
-    if (typeof content === "string") return content;
+    if (typeof content === "string" && content.trim()) return content;
+    if (Array.isArray(content)) {
+      const parts = content
+        .map((p: any) => (typeof p === "string" ? p : p?.text || p?.content || ""))
+        .filter(Boolean);
+      if (parts.length) return parts.join("\n");
+    }
   }
+
+  // OpenAI Responses API (gpt-oss via Workers binding)
+  if (typeof res.output_text === "string" && res.output_text.trim()) return res.output_text;
+  if (Array.isArray(res.output)) {
+    const texts: string[] = [];
+    for (const item of res.output) {
+      if (typeof item?.text === "string") texts.push(item.text);
+      if (typeof item?.content === "string") texts.push(item.content);
+      if (Array.isArray(item?.content)) {
+        for (const part of item.content) {
+          if (typeof part?.text === "string") texts.push(part.text);
+          if (typeof part === "string") texts.push(part);
+        }
+      }
+    }
+    if (texts.length) return texts.join("\n");
+  }
+
+  // Fallback nested fields
+  if (typeof res.text === "string" && res.text.trim()) return res.text;
+  if (typeof res.content === "string" && res.content.trim()) return res.content;
+
   try {
-    return typeof result === "object" ? JSON.stringify(result) : String(result);
-  } catch {
-    return "";
-  }
+    const s = JSON.stringify(result);
+    // Avoid dumping huge opaque objects as "the answer"
+    if (s && s !== "{}" && s !== "null" && s.length < 4000) return s;
+  } catch {}
+  return "";
 }
 
 function cleanCode(text: string): string {
