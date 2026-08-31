@@ -1,7 +1,7 @@
 import type { Env } from "./types";
 import { hashPassword, verifyPassword, issueToken, verifyToken, extractBearer } from "./users";
 import { getUserByEmail, createUser, getUserState } from "./db";
-import { processAgentMessage } from "./agent-executor";
+import { processAgentMessage } from "./agent-handler";
 import { verifyAccess } from "./auth";
 
 const corsHeaders: HeadersInit = {
