@@ -1,5 +1,6 @@
+import { tracing } from "cloudflare:workers";
 import type { Env, AgentState, UserRecord } from "./types";
-import { detectIntent, type IntentResult } from "./intent";
+import { detectIntent, type IntentResult, AGENT_NAME, AGENT_ID } from "./intent";
 import * as github from "./github";
 import { getUserState, saveUserState, logChatMessage, getUserByEmail } from "./db";
 import { searchDuckDuckGo } from "./search";
@@ -13,28 +14,45 @@ export async function processAgentMessage(
 ): Promise<{ reply: string; state: AgentState }> {
   const trimmed = message.trim();
   const userEmail = userRecord.email;
+  // Stable conversation ID per user for Agents dashboard grouping
+  const conversationId = userEmail || "anonymous";
 
   if (!trimmed) {
     const currentState = await getUserState(env.DB, userEmail);
     return { reply: "Pesan tidak boleh kosong.", state: currentState };
   }
 
-  await logChatMessage(env.DB, userEmail, "user", trimmed);
+  // One invoke_agent span per agent turn (Custom harness)
+  return tracing.enterSpan("invoke_agent", async (span) => {
+    span.setAttribute("gen_ai.operation.name", "invoke_agent");
+    span.setAttribute("gen_ai.agent.name", AGENT_NAME);
+    span.setAttribute("gen_ai.agent.id", AGENT_ID);
+    span.setAttribute("gen_ai.conversation.id", conversationId);
 
-  let state = await getUserState(env.DB, userEmail);
-  let reply = "";
+    await logChatMessage(env.DB, userEmail, "user", trimmed);
 
-  try {
-    const intent = await detectIntent(env, trimmed, state.currentRepo);
-    const result = await executeIntent(env, userRecord, intent, trimmed, state);
-    reply = result.reply;
-    state = result.state;
-  } catch (err: any) {
-    reply = `❌ Error: ${err.message || "Terjadi kesalahan saat mengeksekusi perintah."}`;
-  }
+    let state = await getUserState(env.DB, userEmail);
+    let reply = "";
 
-  await logChatMessage(env.DB, userEmail, "assistant", reply);
-  return { reply, state };
+    try {
+      const intent = await detectIntent(env, trimmed, state.currentRepo, conversationId);
+      const result = await executeIntent(
+        env,
+        userRecord,
+        intent,
+        trimmed,
+        state,
+        conversationId
+      );
+      reply = result.reply;
+      state = result.state;
+    } catch (err: any) {
+      reply = `❌ Error: ${err.message || "Terjadi kesalahan saat mengeksekusi perintah."}`;
+    }
+
+    await logChatMessage(env.DB, userEmail, "assistant", reply);
+    return { reply, state };
+  });
 }
 
 async function executeIntent(
@@ -42,7 +60,8 @@ async function executeIntent(
   user: UserRecord,
   intent: IntentResult,
   rawText: string,
-  state: AgentState
+  state: AgentState,
+  conversationId: string = "default-session"
 ): Promise<{ reply: string; state: AgentState }> {
   let { currentRepo, currentBranch } = state;
   const userEmail = user.email;
@@ -50,6 +69,16 @@ async function executeIntent(
   // Cek token GitHub milik user (atau fallback env)
   const ghToken = user.githubToken || env.GITHUB_TOKEN;
   const owner = user.githubUsername || env.GITHUB_OWNER || "me";
+
+  // Branch dinamis: jika belum ada di state, ambil default_branch asli repo dari GitHub
+  if (currentRepo && ghToken && !currentBranch) {
+    try {
+      currentBranch = await github.getDefaultBranch(ghToken, owner, currentRepo);
+    } catch {
+      currentBranch = "main";
+    }
+  }
+  if (!currentBranch) currentBranch = "main";
 
   // Perintah yang membutuhkan GitHub Token
   const githubActions = [
@@ -70,15 +99,26 @@ async function executeIntent(
       return { reply: helpText(), state };
 
     case "create_repo": {
-      const name = intent.params.name;
-      if (!name) throw new Error("Nama repositori wajib ditentukan.");
-      const isPrivate = !!intent.params.private;
-      const res = await github.createRepo(ghToken!, name, isPrivate);
-      const newState = await saveUserState(env.DB, userEmail, { currentRepo: name, currentBranch: "main" });
-      return {
-        reply: `✅ Repositori **[${res.full_name}](${res.html_url})** berhasil dibuat (${isPrivate ? "Private" : "Public"}) di akun **@${owner}**!\nRepo aktif diatur ke: **${name}**`,
-        state: newState,
-      };
+      return tracing.enterSpan("execute_tool", async (span) => {
+        span.setAttribute("gen_ai.operation.name", "execute_tool");
+        span.setAttribute("gen_ai.tool.name", "create_repo");
+        span.setAttribute("gen_ai.agent.name", AGENT_NAME);
+        span.setAttribute("gen_ai.agent.id", AGENT_ID);
+        span.setAttribute("gen_ai.conversation.id", conversationId);
+
+        const name = intent.params.name;
+        if (!name) throw new Error("Nama repositori wajib ditentukan.");
+        const isPrivate = !!intent.params.private;
+        const res = await github.createRepo(ghToken!, name, isPrivate);
+        const newState = await saveUserState(env.DB, userEmail, {
+          currentRepo: name,
+          currentBranch: "main",
+        });
+        return {
+          reply: `✅ Repositori **[${res.full_name}](${res.html_url})** berhasil dibuat (${isPrivate ? "Private" : "Public"}) di akun **@${owner}**!\nRepo aktif diatur ke: **${name}**`,
+          state: newState,
+        };
+      });
     }
 
     case "setup_branch": {
@@ -93,16 +133,24 @@ async function executeIntent(
     }
 
     case "create_branch": {
-      if (!currentRepo) throw new Error("Pilih atau buat repositori terlebih dahulu.");
-      const branch = intent.params.branch;
-      const from = intent.params.from || currentBranch || "main";
-      if (!branch) throw new Error("Nama branch baru wajib ditentukan.");
-      await github.createBranch(ghToken!, owner, currentRepo, branch, from);
-      const newState = await saveUserState(env.DB, userEmail, { currentBranch: branch });
-      return {
-        reply: `✅ Branch **${branch}** berhasil dibuat dari **${from}** pada repo **${currentRepo}**.`,
-        state: newState,
-      };
+      return tracing.enterSpan("execute_tool", async (span) => {
+        span.setAttribute("gen_ai.operation.name", "execute_tool");
+        span.setAttribute("gen_ai.tool.name", "create_branch");
+        span.setAttribute("gen_ai.agent.name", AGENT_NAME);
+        span.setAttribute("gen_ai.agent.id", AGENT_ID);
+        span.setAttribute("gen_ai.conversation.id", conversationId);
+
+        if (!currentRepo) throw new Error("Pilih atau buat repositori terlebih dahulu.");
+        const branch = intent.params.branch;
+        const from = intent.params.from || currentBranch || "main";
+        if (!branch) throw new Error("Nama branch baru wajib ditentukan.");
+        await github.createBranch(ghToken!, owner, currentRepo, branch, from);
+        const newState = await saveUserState(env.DB, userEmail, { currentBranch: branch });
+        return {
+          reply: `✅ Branch **${branch}** berhasil dibuat dari **${from}** pada repo **${currentRepo}**.`,
+          state: newState,
+        };
+      });
     }
 
     case "delete_branch": {
@@ -222,15 +270,25 @@ async function executeIntent(
         diff = `File list: ${files.slice(0, 20).join(", ")}`;
       }
 
-      const aiRes: any = await env.AI.run(MODEL as any, {
-        messages: [
-          {
-            role: "system",
-            content: "Kamu adalah Senior Software Engineer. Berikan review kode ringkas, temukan potensi celah bug/keamanan, dan beri saran perbaikan dalam Markdown.",
-          },
-          { role: "user", content: `Tolong review kode berikut:\n\n${diff.slice(0, 4000)}` },
-        ],
-        max_tokens: 1200,
+      // Metadata-only chat span for code review model call
+      const aiRes: any = await tracing.enterSpan("chat", async (span) => {
+        span.setAttribute("gen_ai.operation.name", "chat");
+        span.setAttribute("gen_ai.agent.name", AGENT_NAME);
+        span.setAttribute("gen_ai.agent.id", AGENT_ID);
+        span.setAttribute("gen_ai.conversation.id", conversationId);
+        span.setAttribute("gen_ai.request.model", MODEL);
+
+        return env.AI.run(MODEL as any, {
+          messages: [
+            {
+              role: "system",
+              content:
+                "Kamu adalah Senior Software Engineer. Berikan review kode ringkas, temukan potensi celah bug/keamanan, dan beri saran perbaikan dalam Markdown.",
+            },
+            { role: "user", content: `Tolong review kode berikut:\n\n${diff.slice(0, 4000)}` },
+          ],
+          max_tokens: 1200,
+        });
       });
 
       return { reply: `🔍 **Hasil Code Review**:\n\n${aiRes?.response || "Review tidak dapat diproses."}`, state };
@@ -259,15 +317,26 @@ async function executeIntent(
 - Jika ada [Hasil Pencarian Web Terkini], gunakan informasi tersebut untuk memberikan jawaban yang akurat.${searchContext}`;
 
       try {
-        const aiRes: any = await env.AI.run(MODEL as any, {
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 1400,
+        // Metadata-only chat span for general chat model call
+        const aiRes: any = await tracing.enterSpan("chat", async (span) => {
+          span.setAttribute("gen_ai.operation.name", "chat");
+          span.setAttribute("gen_ai.agent.name", AGENT_NAME);
+          span.setAttribute("gen_ai.agent.id", AGENT_ID);
+          span.setAttribute("gen_ai.conversation.id", conversationId);
+          span.setAttribute("gen_ai.request.model", MODEL);
+
+          return env.AI.run(MODEL as any, {
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: prompt },
+            ],
+            max_tokens: 1400,
+          });
         });
 
-        const replyText = aiRes?.response || "Halo! Ada yang bisa saya bantu terkait repositori GitHub atau pembuatan skrip coding?";
+        const replyText =
+          aiRes?.response ||
+          "Halo! Ada yang bisa saya bantu terkait repositori GitHub atau pembuatan skrip coding?";
         return { reply: replyText, state };
       } catch (err: any) {
         return {
