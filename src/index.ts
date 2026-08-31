@@ -252,9 +252,15 @@ export default {
         const message = body.message || "";
         const context = body.context || null;
 
-        // Jika context repo dikirim, simpan sebagai state aktif
+        // Jika context repo dikirim, simpan sebagai state aktif (termasuk branch dinamis)
         if (context && context.repo) {
-          await saveUserState(env.DB, user.email, { currentRepo: context.repo });
+          const stateUpdate: { currentRepo: string; currentBranch?: string } = {
+            currentRepo: context.repo,
+          };
+          if (context.branch) {
+            stateUpdate.currentBranch = context.branch;
+          }
+          await saveUserState(env.DB, user.email, stateUpdate);
         }
 
         const result = await processAgentMessage(env, user, message);
