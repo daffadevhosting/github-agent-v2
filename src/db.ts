@@ -1,7 +1,7 @@
 import type { UserRecord, AgentState } from "./types";
 
 /**
- * Mencari data pengguna berdasarkan email
+ * Mengambil data pengguna berdasarkan email
  */
 export async function getUserByEmail(db: D1Database, email: string): Promise<UserRecord | null> {
   const row = await db
@@ -13,7 +13,7 @@ export async function getUserByEmail(db: D1Database, email: string): Promise<Use
 }
 
 /**
- * Menyimpan pengguna baru ke dalam database D1
+ * Mendaftarkan pengguna baru ke database D1
  */
 export async function createUser(
   db: D1Database,
@@ -28,7 +28,6 @@ export async function createUser(
     .bind(id, emailNorm, user.name, user.passwordHash, user.salt, createdAt)
     .run();
 
-  // Inisialisasi state default untuk pengguna baru
   await db
     .prepare("INSERT OR REPLACE INTO user_states (email, current_repo, current_branch, updated_at) VALUES (?, '', 'main', ?)")
     .bind(emailNorm, createdAt)
@@ -45,7 +44,7 @@ export async function createUser(
 }
 
 /**
- * Mengambil state repositori aktif (repo & branch) untuk pengguna
+ * Mengambil status repositori dan branch aktif pengguna
  */
 export async function getUserState(db: D1Database, email: string): Promise<AgentState> {
   const row = await db
@@ -60,13 +59,13 @@ export async function getUserState(db: D1Database, email: string): Promise<Agent
 }
 
 /**
- * Memperbarui state repositori aktif (repo & branch) pengguna
+ * Menyimpan pembaruan status repositori / branch aktif
  */
 export async function saveUserState(
   db: D1Database,
   email: string,
   state: Partial<AgentState>
-): Promise<void> {
+): Promise<AgentState> {
   const current = await getUserState(db, email);
   const updatedRepo = state.currentRepo !== undefined ? state.currentRepo : current.currentRepo;
   const updatedBranch = state.currentBranch !== undefined ? state.currentBranch : current.currentBranch;
@@ -75,10 +74,12 @@ export async function saveUserState(
     .prepare("INSERT INTO user_states (email, current_repo, current_branch, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(email) DO UPDATE SET current_repo = excluded.current_repo, current_branch = excluded.current_branch, updated_at = excluded.updated_at")
     .bind(email.toLowerCase(), updatedRepo, updatedBranch, Date.now())
     .run();
+
+  return { currentRepo: updatedRepo, currentBranch: updatedBranch };
 }
 
 /**
- * Menyimpan riwayat obrolan (opsional untuk audit/log)
+ * Mencatat riwayat pesan untuk audit
  */
 export async function logChatMessage(
   db: D1Database,
