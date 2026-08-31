@@ -1,6 +1,9 @@
-import type { Env } from "./types";
-
 const GITHUB_API = "https://api.github.com";
+
+const BOT_COMMITTER = {
+  name: "GitHub Agent [bot]",
+  email: "github-agent-bot@users.noreply.github.com",
+};
 
 function headers(token: string): Record<string, string> {
   return {
@@ -23,6 +26,53 @@ async function ghFetch(token: string, path: string, options: RequestInit = {}): 
     throw new Error(parsed.message || `GitHub API ${res.status}: ${body}`);
   }
   return res.status === 204 ? null : res.json();
+}
+
+/**
+ * Mengambil seluruh repositori milik pengguna yang sedang login
+ */
+export async function listUserRepositories(token: string): Promise<any[]> {
+  const repos = await ghFetch(token, "/user/repos?sort=updated&per_page=50&affiliation=owner,collaborator");
+  return (repos || []).map((r: any) => ({
+    id: r.id,
+    name: r.name,
+    full_name: r.full_name,
+    owner: r.owner?.login,
+    description: r.description,
+    private: r.private,
+    language: r.language,
+    stars: r.stargazers_count,
+    default_branch: r.default_branch || "main",
+    html_url: r.html_url,
+  }));
+}
+
+/**
+ * Mengambil struktur pohon berkas (file tree) lengkap dari repositori
+ */
+export async function getRepoTree(
+  token: string,
+  owner: string,
+  repo: string,
+  branch = "main"
+): Promise<{ path: string; name: string; type: string; lang: string }[]> {
+  try {
+    const tree = await ghFetch(token, `/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`);
+    return (tree.tree || [])
+      .filter((node: any) => node.type === "blob")
+      .map((node: any) => {
+        const ext = node.path.split(".").pop()?.toLowerCase() || "";
+        return {
+          path: node.path,
+          name: node.path.split("/").pop() || node.path,
+          type: "file",
+          lang: ext,
+        };
+      });
+  } catch (err) {
+    console.warn("Gagal mengambil tree repositori:", err);
+    return [];
+  }
 }
 
 // Repositori
@@ -57,7 +107,7 @@ export async function deleteBranch(token: string, owner: string, repo: string, b
   });
 }
 
-// File
+// File (dengan Co-Authored & Bot Committer Support)
 export async function createOrUpdateFile(
   token: string,
   owner: string,
@@ -65,7 +115,8 @@ export async function createOrUpdateFile(
   path: string,
   content: string,
   message: string,
-  branch = "main"
+  branch = "main",
+  authorUser?: { name: string; email: string }
 ): Promise<any> {
   let sha: string | undefined;
   try {
@@ -74,7 +125,24 @@ export async function createOrUpdateFile(
   } catch {}
 
   const encoded = btoa(unescape(encodeURIComponent(content)));
-  const payload: Record<string, any> = { message, content: encoded, branch };
+
+  // Menambahkan Co-authored-by agar GitHub Agent tercatat sebagai contributor resmi di commit history
+  const commitMessage = `${message}\n\nCo-authored-by: GitHub Agent <github-agent-bot@users.noreply.github.com>`;
+
+  const payload: Record<string, any> = {
+    message: commitMessage,
+    content: encoded,
+    branch,
+    committer: BOT_COMMITTER,
+  };
+
+  if (authorUser && authorUser.email) {
+    payload.author = {
+      name: authorUser.name || "User",
+      email: authorUser.email,
+    };
+  }
+
   if (sha) payload.sha = sha;
 
   return ghFetch(token, `/repos/${owner}/${repo}/contents/${path}`, {
@@ -106,9 +174,16 @@ export async function deleteFile(
   branch = "main"
 ): Promise<any> {
   const file = await getFile(token, owner, repo, path, branch);
+  const commitMessage = `${message}\n\nCo-authored-by: GitHub Agent <github-agent-bot@users.noreply.github.com>`;
+
   return ghFetch(token, `/repos/${owner}/${repo}/contents/${path}`, {
     method: "DELETE",
-    body: JSON.stringify({ message, sha: file.sha, branch }),
+    body: JSON.stringify({
+      message: commitMessage,
+      sha: file.sha,
+      branch,
+      committer: BOT_COMMITTER,
+    }),
     headers: { "Content-Type": "application/json" },
   });
 }
@@ -139,9 +214,10 @@ export async function createPullRequest(
   base = "main",
   body = ""
 ): Promise<any> {
+  const prBody = `${body}\n\n---\n*🤖 Dibuat secara otomatis dengan bantuan [GitHub Agent AI](https://github.com).*`;
   return ghFetch(token, `/repos/${owner}/${repo}/pulls`, {
     method: "POST",
-    body: JSON.stringify({ title, head, base, body }),
+    body: JSON.stringify({ title, head, base, body: prBody }),
     headers: { "Content-Type": "application/json" },
   });
 }
