@@ -1,9 +1,10 @@
 import type { Env, UserRecord } from "./types";
 import { hashPassword, verifyPassword, issueToken, verifyToken, extractBearer } from "./users";
-import { getUserByEmail, createManualUser, getUserState } from "./db";
-import { processAgentMessage } from "./agent-handler";
+import { getUserByEmail, createManualUser, getUserState, saveUserState } from "./db";
+import { processAgentMessage } from "./agent-executor";
 import { verifyAccess } from "./auth";
 import { getGitHubAuthorizeUrl, createOAuthState, handleGitHubOAuthCallback } from "./oauth";
+import { listUserRepositories, getRepoTree, getFile } from "./github";
 
 const corsHeaders: HeadersInit = {
   "Access-Control-Allow-Origin": "*",
@@ -49,10 +50,10 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
-    // 2. GitHub OAuth Routes
+    // 2. GitHub OAuth Endpoints
     if (path === "/auth/github" && request.method === "GET") {
       if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
-        return json({ error: "GITHUB_CLIENT_ID atau GITHUB_CLIENT_SECRET belum dikonfigurasi di Worker." }, 500);
+        return json({ error: "GITHUB_CLIENT_ID belum dikonfigurasi di Worker secrets." }, 500);
       }
       const state = createOAuthState();
       const authUrl = getGitHubAuthorizeUrl(env, request, state);
@@ -89,7 +90,7 @@ export default {
       }
     }
 
-    // 3. Manual Auth Endpoints (Email & Password)
+    // 3. Manual Auth Endpoints
     if (path === "/auth/register" && request.method === "POST") {
       try {
         const body = (await request.json().catch(() => ({}))) as any;
@@ -166,7 +167,68 @@ export default {
       });
     }
 
-    // 4. API Chat & State Endpoints
+    // 4. Repositories & File Tree API (Untuk Sidebar Pengguna)
+    if (path === "/api/repos" && request.method === "GET") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+
+      const token = user.githubToken || env.GITHUB_TOKEN;
+      if (!token) {
+        return json({ repos: [], message: "Akun GitHub belum terhubung" });
+      }
+
+      try {
+        const repos = await listUserRepositories(token);
+        return json({ repos });
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal mengambil daftar repo" }, 500);
+      }
+    }
+
+    if (path.startsWith("/api/repos/") && path.endsWith("/tree") && request.method === "GET") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+
+      const token = user.githubToken || env.GITHUB_TOKEN;
+      if (!token) return json({ error: "Akun GitHub belum terhubung" }, 400);
+
+      const parts = path.replace("/api/repos/", "").replace("/tree", "").split("/");
+      const owner = parts[0];
+      const repo = parts[1];
+      const branch = url.searchParams.get("branch") || "main";
+
+      try {
+        const files = await getRepoTree(token, owner, repo, branch);
+        return json({ files });
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal mengambil struktur berkas" }, 500);
+      }
+    }
+
+    if (path.startsWith("/api/repos/") && path.endsWith("/file") && request.method === "GET") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+
+      const token = user.githubToken || env.GITHUB_TOKEN;
+      if (!token) return json({ error: "Akun GitHub belum terhubung" }, 400);
+
+      const parts = path.replace("/api/repos/", "").replace("/file", "").split("/");
+      const owner = parts[0];
+      const repo = parts[1];
+      const filePath = url.searchParams.get("path") || "";
+      const branch = url.searchParams.get("branch") || "main";
+
+      if (!filePath) return json({ error: "Parameter path file wajib disertakan" }, 400);
+
+      try {
+        const file = await getFile(token, owner, repo, filePath, branch);
+        return json({ file });
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal membaca isi file" }, 500);
+      }
+    }
+
+    // 5. Chat & Context API
     if (path === "/api/state" && request.method === "GET") {
       const user = await getAuthenticatedUser(request, env);
       if (!user) return json({ error: "Unauthorized" }, 401);
@@ -188,6 +250,13 @@ export default {
       try {
         const body = (await request.json().catch(() => ({}))) as any;
         const message = body.message || "";
+        const context = body.context || null;
+
+        // Jika context repo dikirim, simpan sebagai state aktif
+        if (context && context.repo) {
+          await saveUserState(env.DB, user.email, { currentRepo: context.repo });
+        }
+
         const result = await processAgentMessage(env, user, message);
         return json(result);
       } catch (err: any) {
@@ -195,7 +264,7 @@ export default {
       }
     }
 
-    // 5. Static Assets (Frontend UI)
+    // 6. Static Assets (Frontend UI)
     if (env.ASSETS) {
       return env.ASSETS.fetch(request);
     }
