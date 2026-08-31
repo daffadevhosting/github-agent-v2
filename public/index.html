@@ -1341,7 +1341,14 @@
     let currentUser = null;
     let userRepos = [];
     let selectedRepo = null;
+    let selectedBranch = null;
     let activeContext = null;
+
+
+    function getRepoBranch(repo) {
+      if (!repo) return "main";
+      return repo.default_branch || repo.branch || "main";
+    }
 
     function getToken() { return localStorage.getItem(TOKEN_KEY); }
     function getStoredUser() {
@@ -1357,6 +1364,7 @@
       localStorage.removeItem(USER_KEY);
       currentUser = null;
       selectedRepo = null;
+      selectedBranch = null;
       activeContext = null;
     }
 
@@ -1582,7 +1590,7 @@
             </span>
             <span>
               <i data-lucide="git-branch" style="width:11px; height:11px;"></i>
-              ${repo.default_branch || 'main'}
+              ${getRepoBranch(repo)}
             </span>
           </div>
         `;
@@ -1607,11 +1615,20 @@
       fetchRepos();
     });
 
-    /* Buka File Explorer Repositori Asli */
+    /* Buka File Explorer Repositori Asli + tampilkan ringkasan di area percakapan */
     async function openRepoExplorer(repo) {
       selectedRepo = repo;
+      selectedBranch = getRepoBranch(repo);
       activeRepoName.textContent = repo.full_name || repo.name;
-      activeRepoBranch.textContent = repo.default_branch || 'master';
+      activeRepoBranch.textContent = selectedBranch;
+
+      // Set konteks aktif (repo + branch dinamis) agar AI/edit memakai branch yang benar
+      setContext({
+        type: "repo",
+        repoName: repo.name,
+        branch: selectedBranch,
+        fullName: repo.full_name || repo.name
+      });
 
       sidebarReposView.style.display = "none";
       sidebarFilesView.classList.add("active");
@@ -1625,12 +1642,37 @@
 
       try {
         const owner = repo.owner || repo.full_name?.split('/')[0] || currentUser?.githubUsername;
-        const res = await apiRequest(`/api/repos/${owner}/${repo.name}/tree?branch=${repo.default_branch || 'master'}`);
+        const res = await apiRequest(`/api/repos/${owner}/${repo.name}/tree?branch=${encodeURIComponent(selectedBranch)}`);
         repo.files = res.files || [];
         renderFileTree(repo.files);
+
+        // Tampilkan isi repo di layout percakapan
+        showRepoContentsInChat(repo, selectedBranch, repo.files);
       } catch (err) {
         fileTreeContainer.innerHTML = `<div style="padding:16px; text-align:center; color:var(--error); font-size:12px;">Gagal memuat berkas: ${err.message}</div>`;
+        addMessage("error", `Gagal memuat struktur repo **${repo.name}**: ${err.message}`);
       }
+    }
+
+    function showRepoContentsInChat(repo, branch, files) {
+      const fullName = repo.full_name || repo.name;
+      const maxShow = 40;
+      const list = (files || []).slice(0, maxShow);
+      let body = `📂 **Repo aktif:** \`${fullName}\`  ·  **Branch:** \`${branch}\`\n\n`;
+      if (!list.length) {
+        body += "_Repositori ini masih kosong._";
+      } else {
+        body += `**Struktur file** (${files.length} file${files.length > maxShow ? ", menampilkan " + maxShow + " pertama" : ""}):\n\n`;
+        body += list.map((f) => `• \`${f.path}\``).join("\n");
+        if (files.length > maxShow) {
+          body += `\n\n_…dan ${files.length - maxShow} file lainnya. Klik file di sidebar untuk review._`;
+        } else {
+          body += `\n\n_Klik file di sidebar untuk memuat isinya ke chat._`;
+        }
+      }
+      addMessage("system", body);
+      ctxMetaText.textContent = `${fullName} @ ${branch}`;
+      renderIcons();
     }
 
     btnBackToRepos.addEventListener("click", () => {
@@ -1681,13 +1723,15 @@
       showThinking(`Mengambil isi file ${file.path}...`);
       try {
         const owner = selectedRepo.owner || selectedRepo.full_name?.split('/')[0] || currentUser?.githubUsername;
-        const res = await apiRequest(`/api/repos/${owner}/${selectedRepo.name}/file?path=${encodeURIComponent(file.path)}&branch=${selectedRepo.default_branch || 'main'}`);
+        const branch = selectedBranch || getRepoBranch(selectedRepo);
+        const res = await apiRequest(`/api/repos/${owner}/${selectedRepo.name}/file?path=${encodeURIComponent(file.path)}&branch=${encodeURIComponent(branch)}`);
         removeThinking();
         
         const content = res.file?.content || "";
         setContext({
           type: "file",
           repoName: selectedRepo.name,
+          branch: selectedBranch || getRepoBranch(selectedRepo),
           path: file.path,
           content
         });
@@ -1716,15 +1760,21 @@
     function updateContextBanner() {
       if (activeContext) {
         contextBanner.classList.add("show");
+        const br = activeContext.branch || selectedBranch || (selectedRepo ? getRepoBranch(selectedRepo) : "main");
         if (activeContext.type === "repo") {
-          contextBannerText.textContent = `Repo: ${activeContext.repoName} (Semua File)`;
+          contextBannerText.textContent = `Repo: ${activeContext.repoName} @ ${br}`;
         } else {
-          contextBannerText.textContent = `File: ${activeContext.repoName}/${activeContext.path}`;
+          contextBannerText.textContent = `File: ${activeContext.repoName}/${activeContext.path} @ ${br}`;
         }
-        ctxMetaText.textContent = `Konteks: ${activeContext.repoName}`;
+        ctxMetaText.textContent = `${activeContext.repoName} @ ${br}`;
       } else {
         contextBanner.classList.remove("show");
-        ctxMetaText.textContent = selectedRepo ? `Repo: ${selectedRepo.name}` : "Pilih repo di sidebar untuk konteks AI";
+        if (selectedRepo) {
+          const br = selectedBranch || getRepoBranch(selectedRepo);
+          ctxMetaText.textContent = `${selectedRepo.name} @ ${br}`;
+        } else {
+          ctxMetaText.textContent = "Pilih repo di sidebar untuk konteks AI";
+        }
       }
       renderIcons();
     }
@@ -1737,7 +1787,7 @@
 
     btnInjectFullRepo.addEventListener("click", () => {
       if (!selectedRepo) return;
-      setContext({ type: "repo", repoName: selectedRepo.name });
+      setContext({ type: "repo", repoName: selectedRepo.name, branch: selectedBranch || getRepoBranch(selectedRepo) });
       sendMessage(`Tolong jelaskan gambaran umum, arsitektur, dan struktur file dari repo **${selectedRepo.full_name || selectedRepo.name}**.`);
       if (window.innerWidth <= 768) {
         sidebar.classList.remove("open");
@@ -1747,13 +1797,13 @@
 
     btnQuickReview.addEventListener("click", () => {
       if (!selectedRepo) return;
-      setContext({ type: "repo", repoName: selectedRepo.name });
+      setContext({ type: "repo", repoName: selectedRepo.name, branch: selectedBranch || getRepoBranch(selectedRepo) });
       sendMessage(`Tolong lakukan Code Review menyeluruh untuk repositori **${selectedRepo.name}**. Identifikasi potensi security issue dan best practice yang perlu diperbaiki.`);
     });
 
     btnQuickRefactor.addEventListener("click", () => {
       if (!selectedRepo) return;
-      setContext({ type: "repo", repoName: selectedRepo.name });
+      setContext({ type: "repo", repoName: selectedRepo.name, branch: selectedBranch || getRepoBranch(selectedRepo) });
       sendMessage(`Tolong berikan rekomendasi refactoring & clean code untuk repositori **${selectedRepo.name}**.`);
     });
 
@@ -1901,9 +1951,13 @@
           message: value,
           context: activeContext ? {
             repo: activeContext.repoName,
+            branch: activeContext.branch || selectedBranch || (selectedRepo ? getRepoBranch(selectedRepo) : undefined),
             file: activeContext.path,
             content: activeContext.content
-          } : null
+          } : (selectedRepo ? {
+            repo: selectedRepo.name,
+            branch: selectedBranch || getRepoBranch(selectedRepo)
+          } : null)
         };
 
         const data = await apiRequest("/api/chat", "POST", payload);
