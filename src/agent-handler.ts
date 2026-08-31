@@ -2,6 +2,7 @@ import type { Env, AgentState } from "./types";
 import { detectIntent, type IntentResult } from "./intent";
 import * as github from "./github";
 import { getUserState, saveUserState, logChatMessage } from "./db";
+import { searchDuckDuckGo } from "./search";
 
 const MODEL = "@cf/openai/gpt-oss-120b";
 
@@ -22,6 +23,7 @@ export async function processAgentMessage(
   let reply = "";
 
   try {
+    // 1. Deteksi apakah intent perintah GitHub atau percakapan umum
     const intent = await detectIntent(env, trimmed, state.currentRepo);
     const result = await executeIntent(env, userEmail, intent, trimmed, state);
     reply = result.reply;
@@ -66,7 +68,7 @@ async function executeIntent(
       if (!repo) throw new Error("Tentukan nama repositori terlebih dahulu.");
       const newState = await saveUserState(env.DB, userEmail, { currentRepo: repo, currentBranch: branch });
       return {
-        reply: `✅ Repo aktif: **${repo}**, Branch: **${branch}**`,
+        reply: `✅ Repo aktif diatur ke: **${repo}**, Branch: **${branch}**`,
         state: newState,
       };
     }
@@ -107,7 +109,7 @@ async function executeIntent(
       const body = intent.params.body || "Dibuat otomatis oleh GitHub Agent.";
       const pr = await github.createPullRequest(env, owner, currentRepo, title, head, base, body);
       return {
-        reply: `🚀 Pull Request berhasil dibuat:\n**#${pr.number} ${pr.title}**\n${pr.html_url}`,
+        reply: `🚀 Pull Request berhasil dibuat:\n**[#${pr.number} ${pr.title}](${pr.html_url})**`,
         state,
       };
     }
@@ -136,7 +138,7 @@ async function executeIntent(
       if (!title) throw new Error("Judul issue wajib disertakan.");
       const body = intent.params.body || "Dibuat via GitHub Agent.";
       const issue = await github.createIssue(env, owner, currentRepo, title, body, intent.params.labels);
-      return { reply: `📌 Issue berhasil dibuat: **#${issue.number} ${issue.title}**\n${issue.html_url}`, state };
+      return { reply: `📌 Issue berhasil dibuat: **[#${issue.number} ${issue.title}](${issue.html_url})**`, state };
     }
 
     case "list_issues": {
@@ -205,11 +207,11 @@ async function executeIntent(
         messages: [
           {
             role: "system",
-            content: "Kamu adalah Senior Code Reviewer. Berikan review singkat, temukan potensi bug/keamanan dalam bahasa Indonesia.",
+            content: "Kamu adalah Senior Software Engineer. Berikan review kode ringkas, temukan celah keamanan, dan berikan saran perbaikan dalam Markdown.",
           },
-          { role: "user", content: `Tolong review perubahan kode berikut:\n\n${diff.slice(0, 4000)}` },
+          { role: "user", content: `Tolong review kode berikut:\n\n${diff.slice(0, 4000)}` },
         ],
-        max_tokens: 1000,
+        max_tokens: 1200,
       });
 
       return { reply: `🔍 **Hasil Code Review**:\n\n${aiRes?.response || "Review tidak dapat diproses."}`, state };
@@ -217,47 +219,87 @@ async function executeIntent(
 
     case "chat":
     default: {
-      const prompt = intent.params.prompt || rawText;
-      const aiRes: any = await env.AI.run(MODEL as any, {
-        messages: [
-          {
-            role: "system",
-            content: `Kamu adalah asisten GitHub Agent. Repo aktif: "${currentRepo || "belum diset"}", Branch: "${currentBranch}". Jawab dalam bahasa Indonesia dengan jelas dan ramah.`,
-          },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 800,
-      });
-      return { reply: aiRes?.response || "Maaf, saya tidak dapat memahami permintaan Anda.", state };
+      const prompt = intent.params?.prompt || rawText;
+
+      // 2. Deteksi apakah perlu pencarian web DuckDuckGo
+      const needsSearch = shouldSearchWeb(prompt);
+      let searchContext = "";
+
+      if (needsSearch) {
+        const searchResults = await searchDuckDuckGo(prompt, 3);
+        if (searchResults.length > 0) {
+          searchContext = `\n\n[Hasil Pencarian Web Terkini (DuckDuckGo)]:\n` +
+            searchResults.map((r, i) => `${i + 1}. **${r.title}**: ${r.snippet} (Sumber: ${r.url})`).join("\n");
+        }
+      }
+
+      const systemPrompt = `Kamu adalah GitHub Agent & Coding Assistant AI yang cerdas, ramah, dan profesional.
+- Status aktif saat ini: Repo: "${currentRepo || "(belum dipilih)"}", Branch: "${currentBranch}".
+- Jika pengguna menyapa (seperti "Halo", "Hai", "Pagi"), balas dengan ramah dalam bahasa Indonesia dan tawarkan bantuan terkait GitHub/coding.
+- Jika pengguna meminta script/kode/tutorial atau pertanyaan teknis, jelaskan secara lengkap menggunakan Markdown dengan format blok kode (\`\`\`bahasa ... \`\`\`).
+- Jika ada [Hasil Pencarian Web Terkini], gunakan informasi tersebut untuk memberikan jawaban yang akurat.${searchContext}`;
+
+      try {
+        const aiRes: any = await env.AI.run(MODEL as any, {
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 1400,
+        });
+
+        const replyText = aiRes?.response || "Halo! Ada yang bisa saya bantu terkait repositori GitHub atau pembuatan skrip coding?";
+        return { reply: replyText, state };
+      } catch (err: any) {
+        return {
+          reply: `Halo! Saya adalah GitHub Agent. Kamu bisa meminta saya membuat repo, mengelola branch, membuat file, review kode, atau tanya jawab skrip coding. (Detail: ${err.message || "Model AI busy"})`,
+          state,
+        };
+      }
     }
   }
 }
 
+/**
+ * Mendeteksi apakah pesan membutuhkan pencarian DuckDuckGo
+ */
+function shouldSearchWeb(text: string): boolean {
+  const t = text.toLowerCase();
+  const searchKeywords = [
+    "cari", "search", "bagaimana cara", "tutorial", "library", "contoh script",
+    "dokumentasi", "doc", "versi", "framework", "terbaru", "cara menggunakan", "apa itu"
+  ];
+  return searchKeywords.some((kw) => t.includes(kw));
+}
+
 function helpText(): string {
-  return `🤖 **Panduan Perintah GitHub Agent**
+  return `🤖 **Panduan Lengkap GitHub Agent**
 
 📦 **Repositori**
-• "buat repo namaproject" — Membuat repo baru (Public)
-• "buat repo rahasia private" — Membuat repo baru (Private)
-• "setup repo namaproject branch main" — Mengatur repo & branch aktif
+• \`buat repo namaproject\` — Membuat repo baru (Public)
+• \`buat repo secret private\` — Membuat repo baru (Private)
+• \`setup repo namaproject branch main\` — Mengatur repo & branch aktif
 
 🌿 **Branch**
-• "buat branch feature dari main" — Membuat branch baru
-• "hapus branch feature" — Menghapus branch
+• \`buat branch feature dari main\` — Membuat branch baru
+• \`hapus branch feature\` — Menghapus branch
 
 📄 **File & Kode**
-• "buat file index.js" — Membuat / memperbarui file
-• "baca file config.json" — Membaca isi file
-• "list files" — Menampilkan daftar file di repo
+• \`buat file index.js\` — Membuat / memperbarui file
+• \`baca file config.json\` — Membaca isi file
+• \`list files\` — Menampilkan daftar file di repo
 
 🔀 **Pull Request & Review**
-• "buat PR judul Fix Bug dari feature ke main" — Membuat PR
-• "list PR" — Menampilkan daftar PR
-• "merge PR #1" — Melakukan merge PR
-• "review PR #1" — Code review otomatis dengan AI
+• \`buat PR judul Fix Bug dari feature ke main\` — Membuat PR
+• \`list PR\` — Menampilkan daftar PR
+• \`merge PR #1\` — Melakukan merge PR
+• \`review PR #1\` — Code review otomatis dengan AI
 
 📋 **Issue**
-• "buat issue judul Error login" — Membuat issue baru
-• "list issue" — Menampilkan daftar issue
-• "tutup issue #2" — Menutup issue`;
+• \`buat issue judul Error login\` — Membuat issue baru
+• \`list issue\` — Menampilkan daftar issue
+• \`tutup issue #2\` — Menutup issue
+
+💬 **Chat Umum & Web Search**
+• Kamu bisa langsung bertanya konsep coding apa saja atau minta dibuatkan script. Agen akan otomatis mencari referensi lewat DuckDuckGo jika diperlukan!`;
 }
