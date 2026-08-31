@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  
-  <!-- Font Awesome Icons & Lucide Icons -->
+
+  <!-- Font Awesome & Lucide Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -30,6 +30,8 @@
       --assistant-bubble: transparent;
       --error: #ef4444;
       --error-bg: rgba(239, 68, 68, 0.1);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.1);
       --radius: 16px;
       --radius-sm: 10px;
       --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -61,7 +63,7 @@
     }
     .screen.active { display: flex; }
 
-    /* Auth */
+    /* Auth Screen */
     .auth-wrap {
       flex: 1;
       display: flex;
@@ -229,7 +231,7 @@
       cursor: pointer;
     }
 
-    /* Chat */
+    /* Chat Screen */
     #chat-screen { background: var(--bg); }
 
     .chat-header {
@@ -327,6 +329,45 @@
       color: var(--text);
     }
 
+    /* Connection Banner Warning */
+    .connection-banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--warning-bg);
+      border-bottom: 1px solid rgba(245, 158, 11, 0.25);
+      color: var(--warning);
+      padding: 8px 16px;
+      font-size: 12px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .connection-banner.show {
+      display: flex;
+    }
+
+    .connection-banner .banner-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .connection-banner button {
+      background: rgba(245, 158, 11, 0.2);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: var(--warning);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .connection-banner button:hover {
+      background: rgba(245, 158, 11, 0.35);
+    }
+
     #messages {
       flex: 1;
       overflow-y: auto;
@@ -355,6 +396,11 @@
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     .msg-row.user { flex-direction: row-reverse; }
@@ -692,6 +738,15 @@
       </div>
     </header>
 
+    <!-- Disconnection Warning Banner -->
+    <div class="connection-banner" id="conn-banner">
+      <div class="banner-info">
+        <i data-lucide="wifi-off" style="width: 14px; height: 14px;"></i>
+        <span id="banner-text">Koneksi ke server agen terputus. Tombol kirim dinonaktifkan.</span>
+      </div>
+      <button type="button" id="reconnect-btn">Hubungkan Ulang</button>
+    </div>
+
     <div id="messages">
       <div class="empty-state" id="empty-state">
         <div class="hero-icon">
@@ -719,7 +774,7 @@
     <div class="input-area">
       <div class="input-shell">
         <textarea id="input" rows="1" placeholder="Tulis perintah atau tanya apa saja…" autocomplete="off"></textarea>
-        <button id="send" type="button" disabled title="Kirim">
+        <button id="send" type="button" disabled title="Tulis pesan atau tunggu koneksi tersambung">
           <i data-lucide="send" style="width: 16px; height: 16px;"></i>
         </button>
       </div>
@@ -747,6 +802,9 @@
     const sendBtn = document.getElementById("send");
     const ctxMeta = document.getElementById("ctx-meta");
     const connBadge = document.getElementById("conn-badge");
+    const connBanner = document.getElementById("conn-banner");
+    const bannerText = document.getElementById("banner-text");
+    const reconnectBtn = document.getElementById("reconnect-btn");
     const userAvatar = document.getElementById("user-avatar");
     const userLabel = document.getElementById("user-label");
     const logoutBtn = document.getElementById("logout-btn");
@@ -756,6 +814,7 @@
     let hasMessages = false;
     let currentUser = null;
     let reconnectTimeout = null;
+    let reconnectAttempts = 0;
 
     function getToken() { return localStorage.getItem(TOKEN_KEY); }
     function getStoredUser() {
@@ -823,7 +882,7 @@
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || data.message || "Request failed");
+      if (!res.ok) throw new Error(data.error || data.message || "Request gagal");
       return data;
     }
 
@@ -904,20 +963,33 @@
       connBadge.classList.remove("online", "offline", "connecting");
       connBadge.classList.add(status);
       connBadge.title = status === "online" ? "Online: Terhubung" : status === "connecting" ? "Menghubungkan..." : "Offline: Terputus";
+
+      if (status === "online") {
+        connBanner.classList.remove("show");
+        reconnectAttempts = 0;
+      } else if (status === "offline") {
+        bannerText.textContent = "Koneksi ke server agen terputus. Tombol kirim tidak aktif.";
+        connBanner.classList.add("show");
+      } else if (status === "connecting") {
+        bannerText.textContent = "Sedang mencoba menghubungkan ke server WebSocket...";
+        connBanner.classList.add("show");
+      }
+      renderIcons();
     }
 
     function connectWS() {
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
       const token = getToken();
-      const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const host = location.host;
-      
-      setBadgeStatus("connecting");
+      if (!token) return;
 
-      // Menghubungkan WebSocket ke worker root dengan token auth
-      const wsUrl = `${proto}//${host}/?token=${encodeURIComponent(token || "")}`;
-      
+      // Mendeteksi protokol & host yang tepat
+      const host = location.host || "localhost:8787";
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+
+      setBadgeStatus("connecting");
+      const wsUrl = `${proto}//${host}/?token=${encodeURIComponent(token)}`;
+
       try {
         ws = new WebSocket(wsUrl);
       } catch (e) {
@@ -932,17 +1004,21 @@
         updateSendState();
       });
 
-      ws.addEventListener("close", () => {
+      ws.addEventListener("close", (e) => {
+        console.warn("WebSocket ditutup:", e.code, e.reason);
         setBadgeStatus("offline");
         updateSendState();
+
         if (getToken() && chatScreen.classList.contains("active")) {
           if (reconnectTimeout) clearTimeout(reconnectTimeout);
-          reconnectTimeout = setTimeout(connectWS, 3000);
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+          reconnectAttempts++;
+          reconnectTimeout = setTimeout(connectWS, delay);
         }
       });
 
       ws.addEventListener("error", (e) => {
-        console.warn("WebSocket encounter error:", e);
+        console.warn("WebSocket error:", e);
         setBadgeStatus("offline");
         updateSendState();
       });
@@ -975,6 +1051,11 @@
         }
       });
     }
+
+    reconnectBtn.addEventListener("click", () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      connectWS();
+    });
 
     function clearEmpty() {
       if (!hasMessages) {
@@ -1047,12 +1128,32 @@
     function updateSendState() {
       const hasText = inputEl.value.trim().length > 0;
       const connected = ws && ws.readyState === WebSocket.OPEN;
-      sendBtn.disabled = !hasText || !connected || busy;
+      
+      const shouldDisable = !hasText || !connected || busy;
+      sendBtn.disabled = shouldDisable;
+
+      if (!connected) {
+        sendBtn.title = "Koneksi terputus. Menghubungkan ulang...";
+      } else if (busy) {
+        sendBtn.title = "Sedang memproses permintaan...";
+      } else if (!hasText) {
+        sendBtn.title = "Tulis perintah terlebih dahulu";
+      } else {
+        sendBtn.title = "Kirim pesan (Enter)";
+      }
     }
 
     function sendMessage(text) {
       const value = (text ?? inputEl.value).trim();
-      if (!value || !ws || ws.readyState !== WebSocket.OPEN || busy) return;
+      if (!value) return;
+
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        addMessage("error", "Gagal mengirim: Tidak terhubung ke server WebSocket. Silakan klik 'Hubungkan Ulang' pada bilah atas.");
+        return;
+      }
+
+      if (busy) return;
+
       addMessage("user", value);
       ws.send(value);
       inputEl.value = "";
@@ -1077,7 +1178,14 @@
 
     document.querySelectorAll(".suggestion").forEach((btn) => {
       btn.addEventListener("click", () => {
-        sendMessage(btn.dataset.prompt);
+        const prompt = btn.dataset.prompt;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          sendMessage(prompt);
+        } else {
+          inputEl.value = prompt;
+          updateSendState();
+          inputEl.focus();
+        }
       });
     });
 
