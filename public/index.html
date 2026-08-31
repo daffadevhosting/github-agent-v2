@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <script src="https://unpkg.com/lucide@latest"></script>
 
-  <!-- Marked.js & DOMPurify untuk Render Markdown Aman & Rapi -->
+  <!-- Marked.js & DOMPurify -->
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js"></script>
 
@@ -30,10 +30,14 @@
       --accent: #10a37f;
       --accent-hover: #0d8c6d;
       --accent-soft: rgba(16, 163, 127, 0.12);
+      --github-btn: #24292f;
+      --github-btn-hover: #32383f;
       --user-bubble: #262626;
       --code-bg: #141414;
       --error: #ef4444;
       --error-bg: rgba(239, 68, 68, 0.1);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.1);
       --radius: 16px;
       --radius-sm: 10px;
       --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -83,7 +87,7 @@
       background: var(--bg-elevated);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 40px 32px;
+      padding: 36px 28px;
       box-shadow: var(--shadow);
     }
 
@@ -92,7 +96,7 @@
       flex-direction: column;
       align-items: center;
       gap: 12px;
-      margin-bottom: 32px;
+      margin-bottom: 28px;
     }
 
     .auth-logo .mark {
@@ -110,18 +114,57 @@
     .auth-logo h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.03em; }
     .auth-logo p { font-size: 13px; color: var(--text-secondary); text-align: center; line-height: 1.5; }
 
+    .btn-github {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--github-btn);
+      border: 1px solid #3c444d;
+      color: #fff;
+      border-radius: var(--radius-sm);
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: background 0.15s;
+      text-decoration: none;
+      margin-bottom: 20px;
+    }
+
+    .btn-github:hover { background: var(--github-btn-hover); }
+
+    .auth-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .auth-divider::before, .auth-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
     .auth-tabs {
       display: flex;
       background: var(--bg);
       border-radius: 10px;
       padding: 3px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
       border: 1px solid var(--border);
     }
 
     .auth-tab {
       flex: 1;
-      padding: 10px;
+      padding: 8px;
       border: none;
       background: transparent;
       color: var(--text-secondary);
@@ -143,7 +186,7 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     }
 
-    .form-group { margin-bottom: 16px; }
+    .form-group { margin-bottom: 14px; }
 
     .form-group label {
       display: flex;
@@ -157,7 +200,7 @@
 
     .form-group input {
       width: 100%;
-      padding: 12px 14px;
+      padding: 10px 12px;
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
@@ -210,7 +253,7 @@
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .auth-footer {
-      margin-top: 20px;
+      margin-top: 18px;
       text-align: center;
       font-size: 12px;
       color: var(--text-muted);
@@ -272,31 +315,27 @@
       gap: 8px;
     }
 
-    .status-pill {
+    .btn-connect-gh {
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 10px;
-      background: rgba(16, 163, 127, 0.1);
-      border: 1px solid rgba(16, 163, 127, 0.3);
+      padding: 6px 12px;
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: var(--warning);
       border-radius: 999px;
-      font-size: 11px;
-      color: var(--accent);
+      font-size: 11.5px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.15s;
     }
-
-    .status-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 6px var(--accent);
-    }
+    .btn-connect-gh:hover { background: rgba(245, 158, 11, 0.25); }
 
     .user-chip {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 10px 6px 6px;
+      padding: 4px 10px 4px 4px;
       background: var(--bg-elevated);
       border: 1px solid var(--border);
       border-radius: 999px;
@@ -305,8 +344,8 @@
     }
 
     .user-avatar {
-      width: 24px;
-      height: 24px;
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
       background: var(--accent-soft);
       color: var(--accent);
@@ -315,11 +354,14 @@
       justify-content: center;
       font-size: 11px;
       font-weight: 600;
+      overflow: hidden;
     }
 
+    .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
     .btn-icon {
-      width: 36px;
-      height: 36px;
+      width: 34px;
+      height: 34px;
       border-radius: 8px;
       border: 1px solid var(--border);
       background: var(--bg-elevated);
@@ -372,8 +414,10 @@
       justify-content: center;
       margin-top: 2px;
       color: #fff;
+      overflow: hidden;
     }
 
+    .msg-avatar img { width: 100%; height: 100%; object-fit: cover; }
     .msg-row.assistant .msg-avatar { background: linear-gradient(135deg, var(--accent), #0d8c6d); }
     .msg-row.error .msg-avatar { background: var(--error); }
     .msg-row.user .msg-avatar {
@@ -384,11 +428,9 @@
     }
 
     .msg-body { flex: 1; min-width: 0; }
-
     .msg-role { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
     .msg-row.user .msg-role { text-align: right; }
 
-    /* Markdown Styling */
     .msg-content {
       font-size: 14.5px;
       line-height: 1.65;
@@ -406,10 +448,7 @@
       white-space: pre-wrap;
     }
 
-    .msg-row.assistant .msg-content {
-      padding: 2px 0;
-    }
-
+    .msg-row.assistant .msg-content { padding: 2px 0; }
     .msg-row.error .msg-content {
       background: var(--error-bg);
       border: 1px solid rgba(239, 68, 68, 0.25);
@@ -418,24 +457,13 @@
       border-radius: var(--radius-sm);
     }
 
-    /* Format Markdown Elements */
     .msg-content p { margin-bottom: 10px; }
     .msg-content p:last-child { margin-bottom: 0; }
-    .msg-content h1, .msg-content h2, .msg-content h3, .msg-content h4 {
-      margin: 14px 0 8px;
-      color: #fff;
-    }
-    .msg-content ul, .msg-content ol {
-      margin-left: 20px;
-      margin-bottom: 10px;
-    }
+    .msg-content h1, .msg-content h2, .msg-content h3, .msg-content h4 { margin: 14px 0 8px; color: #fff; }
+    .msg-content ul, .msg-content ol { margin-left: 20px; margin-bottom: 10px; }
     .msg-content li { margin-bottom: 4px; }
-    .msg-content a {
-      color: var(--accent);
-      text-decoration: underline;
-    }
+    .msg-content a { color: var(--accent); text-decoration: underline; }
 
-    /* Kode & Code Block */
     .msg-content code:not(pre code) {
       font-family: var(--font-code);
       background: var(--bg-hover);
@@ -479,17 +507,9 @@
       transition: all 0.15s;
     }
 
-    .copy-btn:hover {
-      background: var(--bg-hover);
-      color: var(--text);
-    }
+    .copy-btn:hover { background: var(--bg-hover); color: var(--text); }
 
-    .msg-content pre {
-      margin: 0;
-      padding: 12px 14px;
-      overflow-x: auto;
-    }
-
+    .msg-content pre { margin: 0; padding: 12px 14px; overflow-x: auto; }
     .msg-content pre code {
       font-family: var(--font-code);
       font-size: 13px;
@@ -498,19 +518,6 @@
       background: transparent;
       padding: 0;
     }
-
-    .msg-content table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 12px 0;
-      font-size: 13px;
-    }
-    .msg-content th, .msg-content td {
-      border: 1px solid var(--border);
-      padding: 8px 12px;
-      text-align: left;
-    }
-    .msg-content th { background: var(--bg-elevated); }
 
     .thinking-row {
       display: flex;
@@ -672,15 +679,23 @@
             <i class="fa-brands fa-github fa-2xl"></i>
           </div>
           <h1>GitHub Agent</h1>
-          <p>Automate repos, PRs, issues &amp; code review with natural language</p>
+          <p>Automate repos, PRs, issues &amp; code review dengan natural language</p>
         </div>
+
+        <!-- Tombol Login GitHub 1-Klik -->
+        <a href="/auth/github" class="btn-github">
+          <i class="fa-brands fa-github fa-lg"></i>
+          <span>Masuk dengan GitHub</span>
+        </a>
+
+        <div class="auth-divider">atau dengan email</div>
 
         <div class="auth-tabs">
           <button class="auth-tab active" data-tab="login" type="button">
-            <i data-lucide="log-in" style="width: 15px; height: 15px;"></i> Login
+            <i data-lucide="log-in" style="width: 14px; height: 14px;"></i> Login
           </button>
           <button class="auth-tab" data-tab="register" type="button">
-            <i data-lucide="user-plus" style="width: 15px; height: 15px;"></i> Register
+            <i data-lucide="user-plus" style="width: 14px; height: 14px;"></i> Register
           </button>
         </div>
 
@@ -753,10 +768,10 @@
         </div>
       </div>
       <div class="header-actions">
-        <div class="status-pill">
-          <div class="status-dot"></div>
-          <span>Aktif</span>
-        </div>
+        <!-- Tombol Connect GitHub jika user login manual -->
+        <a href="/auth/github" class="btn-connect-gh" id="connect-gh-btn" style="display:none;">
+          <i class="fa-brands fa-github"></i> Hubungkan GitHub
+        </a>
         <div class="user-chip" id="user-chip">
           <div class="user-avatar" id="user-avatar">U</div>
           <span class="chip-email" id="user-label">User</span>
@@ -773,7 +788,7 @@
           <i class="fa-brands fa-github fa-2x"></i>
         </div>
         <h2>Apa yang ingin dikerjakan?</h2>
-        <p>Kelola repo GitHub atau tanya apa saja terkait coding &amp; skrip pemrograman.</p>
+        <p>Kelola repo GitHub milikmu atau tanya apa saja terkait skrip dan coding.</p>
         <div class="suggestions">
           <button class="suggestion" type="button" data-prompt="help">
             <i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> Lihat perintah
@@ -781,8 +796,8 @@
           <button class="suggestion" type="button" data-prompt="buat repo myproject">
             <i data-lucide="folder-plus" style="width: 14px; height: 14px;"></i> Buat repo baru
           </button>
-          <button class="suggestion" type="button" data-prompt="buat script express js sederhana">
-            <i data-lucide="code" style="width: 14px; height: 14px;"></i> Contoh Script Express.js
+          <button class="suggestion" type="button" data-prompt="buat script rest api express js">
+            <i data-lucide="code" style="width: 14px; height: 14px;"></i> Contoh Script Express
           </button>
           <button class="suggestion" type="button" data-prompt="list files">
             <i data-lucide="files" style="width: 14px; height: 14px;"></i> List files
@@ -806,12 +821,8 @@
     const TOKEN_KEY = "ga_token";
     const USER_KEY = "ga_user";
 
-    // Konfigurasi Marked Renderer
     if (window.marked) {
-      marked.setOptions({
-        gfm: true,
-        breaks: true,
-      });
+      marked.setOptions({ gfm: true, breaks: true });
     }
 
     function renderIcons() {
@@ -831,6 +842,7 @@
     const ctxMetaText = document.getElementById("ctx-meta-text");
     const userAvatar = document.getElementById("user-avatar");
     const userLabel = document.getElementById("user-label");
+    const connectGhBtn = document.getElementById("connect-gh-btn");
     const logoutBtn = document.getElementById("logout-btn");
 
     let isBusy = false;
@@ -871,9 +883,19 @@
 
     function applyUserUI(user) {
       currentUser = user;
-      const initial = (user.name || user.email || "U").charAt(0).toUpperCase();
-      userAvatar.textContent = initial;
-      userLabel.textContent = user.name || user.email;
+      if (user.avatarUrl) {
+        userAvatar.innerHTML = `<img src="${user.avatarUrl}" alt="${user.name || 'User'}">`;
+      } else {
+        const initial = (user.name || user.email || "U").charAt(0).toUpperCase();
+        userAvatar.textContent = initial;
+      }
+      userLabel.textContent = user.githubUsername ? `@${user.githubUsername}` : (user.name || user.email);
+
+      if (user.hasGitHub || user.githubUsername) {
+        connectGhBtn.style.display = "none";
+      } else {
+        connectGhBtn.style.display = "flex";
+      }
     }
 
     document.querySelectorAll(".auth-tab").forEach((tab) => {
@@ -977,17 +999,18 @@
     async function fetchCurrentState() {
       try {
         const data = await apiRequest("/api/state");
-        if (data.state) updateContextMeta(data.state);
+        if (data.state) updateContextMeta(data.state, data.github);
       } catch (err) {
         console.warn("Gagal mengambil state:", err);
       }
     }
 
-    function updateContextMeta(state) {
+    function updateContextMeta(state, githubInfo) {
       if (state && state.currentRepo) {
-        ctxMetaText.textContent = `${state.currentRepo} · ${state.currentBranch || "main"}`;
+        const owner = githubInfo?.username ? `@${githubInfo.username}/` : "";
+        ctxMetaText.textContent = `${owner}${state.currentRepo} · ${state.currentBranch || "main"}`;
       } else {
-        ctxMetaText.textContent = "Belum ada repo aktif";
+        ctxMetaText.textContent = githubInfo?.username ? `Terhubung: @${githubInfo.username}` : "Belum ada repo aktif";
       }
     }
 
@@ -1010,7 +1033,11 @@
       } else if (role === "error") {
         avatar.innerHTML = '<i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i>';
       } else {
-        avatar.textContent = (currentUser?.name || currentUser?.email || "U").charAt(0).toUpperCase();
+        if (currentUser?.avatarUrl) {
+          avatar.innerHTML = `<img src="${currentUser.avatarUrl}" alt="Avatar">`;
+        } else {
+          avatar.textContent = (currentUser?.name || currentUser?.email || "U").charAt(0).toUpperCase();
+        }
       }
 
       const body = document.createElement("div");
@@ -1018,13 +1045,12 @@
 
       const roleEl = document.createElement("div");
       roleEl.className = "msg-role";
-      roleEl.textContent = role === "user" ? "You" : role === "error" ? "Error" : "GitHub Agent";
+      roleEl.textContent = role === "user" ? (currentUser?.name || "You") : role === "error" ? "Error" : "GitHub Agent";
 
       const contentEl = document.createElement("div");
       contentEl.className = "msg-content";
 
       if (role === "assistant" && window.marked && window.DOMPurify) {
-        // Render Markdown & Sanitasi HTML
         const rawHtml = marked.parse(content);
         contentEl.innerHTML = DOMPurify.sanitize(rawHtml);
         enhanceCodeBlocks(contentEl);
@@ -1048,7 +1074,6 @@
         const code = pre.querySelector("code");
         if (!code) return;
 
-        // Bungkus dalam wrapper container
         const wrapper = document.createElement("div");
         wrapper.className = "code-container";
 
@@ -1088,7 +1113,7 @@
       });
     }
 
-    function showThinking(label = "Memproses & mencari referensi…") {
+    function showThinking(label = "Memproses & mengeksekusi…") {
       removeThinking();
       clearEmpty();
       const row = document.createElement("div");
@@ -1164,6 +1189,28 @@
 
     async function boot() {
       renderIcons();
+
+      // Tangkap error dari callback OAuth jika ada
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlError = urlParams.get("error");
+      if (urlError) {
+        showAuthError(urlError);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      // Tangkap token dari hash redirect GitHub OAuth
+      if (window.location.hash.startsWith("#auth=")) {
+        try {
+          const authData = JSON.parse(decodeURIComponent(window.location.hash.replace("#auth=", "")));
+          setSession(authData.token, authData.user);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          enterChat(authData.user);
+          return;
+        } catch (e) {
+          console.error("Gagal mem-parsing auth payload:", e);
+        }
+      }
+
       const token = getToken();
       const user = getStoredUser();
 
