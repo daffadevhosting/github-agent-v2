@@ -1,6 +1,6 @@
 import { tracing } from "cloudflare:workers";
 import type { Env, AgentState, UserRecord } from "./types";
-import { detectIntent, type IntentResult, AGENT_NAME, AGENT_ID } from "./intent";
+import { detectIntent, type IntentResult, AGENT_NAME, AGENT_ID, extractText } from "./intent";
 import * as github from "./github";
 import { getUserState, saveUserState, logChatMessage, getUserByEmail } from "./db";
 import { searchDuckDuckGo } from "./search";
@@ -260,17 +260,49 @@ async function executeIntent(
 
     case "review_code": {
       if (!currentRepo) throw new Error("Pilih repositori terlebih dahulu.");
-      const number = intent.params.number;
+      const number = intent.params.number ?? intent.params.prNumber;
       let diff = "";
+      let reviewTarget = "";
+
       if (number) {
-        const files = await github.getPullRequestFiles(ghToken!, owner, currentRepo, number);
-        diff = files.map((f: any) => `File: ${f.filename}\n${f.patch || ""}`).join("\n\n");
+        const files = await github.getPullRequestFiles(ghToken!, owner, currentRepo, Number(number));
+        diff = files
+          .map((f: any) => `### ${f.filename}\n\`\`\`\n${(f.patch || "(no patch)").slice(0, 2500)}\n\`\`\``)
+          .join("\n\n");
+        reviewTarget = `PR #${number}`;
+      } else if (intent.params.path) {
+        const file = await github.getFile(ghToken!, owner, currentRepo, intent.params.path, currentBranch);
+        diff = `### ${intent.params.path}\n\`\`\`\n${(file.content || "").slice(0, 6000)}\n\`\`\``;
+        reviewTarget = `file ${intent.params.path}`;
       } else {
+        // Ambil isi beberapa file penting agar review bukan hanya daftar nama
         const files = await github.listFiles(ghToken!, owner, currentRepo, currentBranch);
-        diff = `File list: ${files.slice(0, 20).join(", ")}`;
+        const priority = files
+          .filter((p) => /\.(ts|tsx|js|jsx|py|go|rs|java|php|rb|vue|svelte)$/i.test(p))
+          .slice(0, 6);
+        const fallback = files.filter((p) => !p.includes("node_modules") && !p.startsWith(".")).slice(0, 4);
+        const targets = (priority.length ? priority : fallback).slice(0, 5);
+
+        const chunks: string[] = [];
+        for (const p of targets) {
+          try {
+            const file = await github.getFile(ghToken!, owner, currentRepo, p, currentBranch);
+            chunks.push(`### ${p}\n\`\`\`\n${(file.content || "").slice(0, 1800)}\n\`\`\``);
+          } catch {
+            chunks.push(`### ${p}\n_(gagal dibaca)_`);
+          }
+        }
+        diff = chunks.join("\n\n") || `Daftar file: ${files.slice(0, 30).join(", ")}`;
+        reviewTarget = `repo ${owner}/${currentRepo}@${currentBranch}`;
       }
 
-      // Metadata-only chat span for code review model call
+      if (!diff.trim()) {
+        return {
+          reply: `ℹ️ Tidak ada konten yang bisa direview di **${reviewTarget || currentRepo}**.`,
+          state,
+        };
+      }
+
       const aiRes: any = await tracing.enterSpan("chat", async (span) => {
         span.setAttribute("gen_ai.operation.name", "chat");
         span.setAttribute("gen_ai.agent.name", AGENT_NAME);
@@ -283,15 +315,22 @@ async function executeIntent(
             {
               role: "system",
               content:
-                "Kamu adalah Senior Software Engineer. Berikan review kode ringkas, temukan potensi celah bug/keamanan, dan beri saran perbaikan dalam Markdown.",
+                "Kamu adalah Senior Software Engineer. Berikan code review yang konkret dalam Bahasa Indonesia: ringkasan, temuan bug/keamanan, dan saran perbaikan. Gunakan Markdown.",
             },
-            { role: "user", content: `Tolong review kode berikut:\n\n${diff.slice(0, 4000)}` },
+            {
+              role: "user",
+              content: `Review ${reviewTarget}:\n\n${diff.slice(0, 12000)}`,
+            },
           ],
-          max_tokens: 1200,
+          max_tokens: 1600,
         });
       });
 
-      return { reply: `🔍 **Hasil Code Review**:\n\n${aiRes?.response || "Review tidak dapat diproses."}`, state };
+      const reviewText = extractText(aiRes);
+      return {
+        reply: `🔍 **Hasil Code Review** (${reviewTarget}):\n\n${reviewText || "Model tidak mengembalikan teks review. Coba ulangi atau sebutkan path file / nomor PR."}`,
+        state,
+      };
     }
 
     case "chat":
@@ -335,7 +374,7 @@ async function executeIntent(
         });
 
         const replyText =
-          aiRes?.response ||
+          extractText(aiRes) ||
           "Halo! Ada yang bisa saya bantu terkait repositori GitHub atau pembuatan skrip coding?";
         return { reply: replyText, state };
       } catch (err: any) {
