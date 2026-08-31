@@ -147,4 +147,24 @@ export async function createBranch(
   });
 }
 
-export async
+export async function listIssues(
+  token: string,
+  owner: string,
+  repo: string,
+  state = "open"
+): Promise<any[]> {
+  return ghFetch(token, `/repos/${owner}/${repo}/issues?state=${state}&per_page=20`);
+}
+
+export async function closeIssue(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number
+): Promise<any> {
+  return ghFetch(token, `/repos/${owner}/${repo}/issues/${number}`, {
+    method: "PATCH",
+    body: JSON.stringify({ state: "closed" }),
+    headers: { "Content-Type": "application/json" },
+  });
+}
