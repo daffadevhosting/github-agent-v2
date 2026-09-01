@@ -1658,19 +1658,30 @@
       const fullName = repo.full_name || repo.name;
       const maxShow = 40;
       const list = (files || []).slice(0, maxShow);
-      let body = `📂 **Repo aktif:** \`${fullName}\`  ·  **Branch:** \`${branch}\`\n\n`;
+      const lines = [];
+      lines.push(`📂 **Repo aktif:** \`${fullName}\``);
+      lines.push(`🌿 **Branch:** \`${branch}\``);
+      lines.push("");
       if (!list.length) {
-        body += "_Repositori ini masih kosong._";
+        lines.push("_Repositori ini masih kosong._");
       } else {
-        body += `**Struktur file** (${files.length} file${files.length > maxShow ? ", menampilkan " + maxShow + " pertama" : ""}):\n\n`;
-        body += list.map((f) => `• \`${f.path}\``).join("\n");
-        if (files.length > maxShow) {
-          body += `\n\n_…dan ${files.length - maxShow} file lainnya. Klik file di sidebar untuk review._`;
+        const total = files.length;
+        const label = total > maxShow
+          ? `**Struktur file** (${total} file, menampilkan ${maxShow} pertama):`
+          : `**Struktur file** (${total} file):`;
+        lines.push(label);
+        lines.push("");
+        for (const f of list) {
+          lines.push(`- \`${f.path}\``);
+        }
+        lines.push("");
+        if (total > maxShow) {
+          lines.push(`_…dan ${total - maxShow} file lainnya. Klik file di sidebar untuk memuat isinya ke chat._`);
         } else {
-          body += `\n\n_Klik file di sidebar untuk memuat isinya ke chat._`;
+          lines.push("_Klik file di sidebar untuk memuat isinya ke chat._");
         }
       }
-      addMessage("system", body);
+      addMessage("system", lines.join("\n"));
       ctxMetaText.textContent = `${fullName} @ ${branch}`;
       renderIcons();
     }
@@ -1845,10 +1856,10 @@
       const contentEl = document.createElement("div");
       contentEl.className = "msg-content";
 
-      if ((role === "assistant" || role === "user") && window.marked && window.DOMPurify) {
+      if ((role === "assistant" || role === "user" || role === "system") && window.marked && window.DOMPurify) {
         const rawHtml = marked.parse(content);
         contentEl.innerHTML = DOMPurify.sanitize(rawHtml);
-        enhanceCodeBlocks(contentEl);
+        if (role !== "system") enhanceCodeBlocks(contentEl);
       } else {
         contentEl.textContent = content;
       }
