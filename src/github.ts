@@ -5,6 +5,21 @@ const BOT_COMMITTER = {
   email: "github-agent-bot@users.noreply.github.com",
 };
 
+function encodeBase64Utf8(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function decodeBase64Utf8(value: string): string {
+  const binary = atob(value.replace(/\s/g, ""));
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 function headers(token: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
@@ -154,7 +169,7 @@ export async function createOrUpdateFile(
     sha = existing.sha;
   } catch {}
 
-  const encoded = btoa(unescape(encodeURIComponent(content)));
+  const encoded = encodeBase64Utf8(content);
   const commitMessage = `${message}\n\nCo-authored-by: GitHub Agent <github-agent-bot@users.noreply.github.com>`;
 
   const payload: Record<string, any> = {
@@ -189,8 +204,7 @@ export async function getFile(
 ): Promise<{ content: string; sha: string }> {
   const targetBranch = branch || (await getDefaultBranch(token, owner, repo));
   const res = await ghFetch(token, `/repos/${owner}/${repo}/contents/${path}?ref=${targetBranch}`);
-  const raw = atob(res.content.replace(/\n/g, ""));
-  const content = decodeURIComponent(escape(raw));
+  const content = decodeBase64Utf8(res.content);
   return { content, sha: res.sha };
 }
 
