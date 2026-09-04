@@ -13,6 +13,19 @@ const JWT_ISSUER = "github-agent";
 const JWT_AUD = "github-agent-session";
 const TOKEN_TTL = "7d";
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
 function getJwtSecret(env: Env): Uint8Array {
   // Prefer dedicated secret; fall back to a derived key from existing secrets
   const raw =
@@ -27,9 +40,9 @@ export async function hashPassword(
   salt?: string
 ): Promise<{ hash: string; salt: string }> {
   const saltBytes = salt
-    ? Uint8Array.from(atob(salt), (c) => c.charCodeAt(0))
+    ? base64ToBytes(salt)
     : crypto.getRandomValues(new Uint8Array(16));
-  const saltB64 = btoa(String.fromCharCode(...saltBytes));
+  const saltB64 = bytesToBase64(saltBytes);
 
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
@@ -41,14 +54,18 @@ export async function hashPassword(
   const derived = await crypto.subtle.deriveBits(
     {
       name: "PBKDF2",
-      salt: saltBytes,
+      salt: (() => {
+        const buffer = new ArrayBuffer(saltBytes.byteLength);
+        new Uint8Array(buffer).set(saltBytes);
+        return buffer;
+      })(),
       iterations: 100_000,
       hash: "SHA-256",
     },
     keyMaterial,
     256
   );
-  const hash = btoa(String.fromCharCode(...new Uint8Array(derived)));
+  const hash = bytesToBase64(new Uint8Array(derived));
   return { hash, salt: saltB64 };
 }
 
