@@ -1068,7 +1068,7 @@
           <i class="fa-brands fa-github fa-lg"></i>
           <span>Masuk dengan GitHub</span>
         </a>
-
+      <div class="hidden">
         <div class="auth-divider">atau dengan email</div>
 
         <div class="auth-tabs">
@@ -1096,7 +1096,7 @@
             <label for="login-password">
               <i data-lucide="lock" style="width: 14px; height: 14px;"></i> Password
             </label>
-            <input id="login-password" type="password" placeholder="••••••••" required minlength="6" autocomplete="current-password" />
+            <input id="login-password" type="password" placeholder="â¢â¢â¢â¢â¢â¢â¢â¢" required minlength="6" autocomplete="current-password" />
           </div>
           <button class="btn-primary" type="submit" id="login-btn">
             <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i> Masuk
@@ -1131,6 +1131,7 @@
           <span id="auth-switch-text">Belum punya akun?</span>
           <a id="auth-switch-link">Daftar</a>
         </div>
+      </div>
       </div>
     </div>
   </div>
@@ -1275,12 +1276,12 @@
           </div>
 
           <div class="input-shell">
-            <textarea id="input" rows="1" placeholder="Tulis instruksi perbaikan atau tanya apa saja tentang repo ini…" autocomplete="off"></textarea>
+            <textarea id="input" rows="1" placeholder="Tulis instruksi perbaikan atau tanya apa saja tentang repo iniâ¦" autocomplete="off"></textarea>
             <button id="send" type="button" disabled title="Tulis pesan terlebih dahulu">
               <i data-lucide="send" style="width: 16px; height: 16px;"></i>
             </button>
           </div>
-          <div class="input-hint">Enter untuk kirim · Shift+Enter baris baru · Klik file di sidebar untuk auto-inject</div>
+          <div class="input-hint">Enter untuk kirim Â· Shift+Enter baris baru Â· Klik file di sidebar untuk auto-inject</div>
         </div>
       </main>
     </div>
@@ -1447,7 +1448,7 @@
       hideAuthError();
       const btn = document.getElementById("login-btn");
       btn.disabled = true;
-      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Masuk…`;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Masukâ¦`;
       try {
         const data = await apiRequest("/auth/login", "POST", {
           email: document.getElementById("login-email").value,
@@ -1469,7 +1470,7 @@
       hideAuthError();
       const btn = document.getElementById("reg-btn");
       btn.disabled = true;
-      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Membuat akun…`;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Membuat akunâ¦`;
       try {
         const data = await apiRequest("/auth/register", "POST", {
           name: document.getElementById("reg-name").value,
@@ -1659,8 +1660,8 @@
       const maxShow = 40;
       const list = (files || []).slice(0, maxShow);
       const lines = [];
-      lines.push(`📂 **Repo aktif:** \`${fullName}\``);
-      lines.push(`🌿 **Branch:** \`${branch}\``);
+      lines.push(`ð **Repo aktif:** \`${fullName}\``);
+      lines.push(`ð¿ **Branch:** \`${branch}\``);
       lines.push("");
       if (!list.length) {
         lines.push("_Repositori ini masih kosong._");
@@ -1676,7 +1677,7 @@
         }
         lines.push("");
         if (total > maxShow) {
-          lines.push(`_…dan ${total - maxShow} file lainnya. Klik file di sidebar untuk memuat isinya ke chat._`);
+          lines.push(`_â¦dan ${total - maxShow} file lainnya. Klik file di sidebar untuk memuat isinya ke chat._`);
         } else {
           lines.push("_Klik file di sidebar untuk memuat isinya ke chat._");
         }
@@ -1793,7 +1794,7 @@
     btnClearContext.addEventListener("click", () => {
       activeContext = null;
       updateContextBanner();
-      addMessage("system", "ℹ️ Konteks aktif telah dibersihkan.");
+      addMessage("system", "â¹ï¸ Konteks aktif telah dibersihkan.");
     });
 
     btnInjectFullRepo.addEventListener("click", () => {
@@ -1919,7 +1920,7 @@
       });
     }
 
-    function showThinking(label = "Memproses & mengeksekusi…") {
+    function showThinking(label = "Memproses & mengeksekusiâ¦") {
       removeThinking();
       clearEmpty();
       const row = document.createElement("div");
