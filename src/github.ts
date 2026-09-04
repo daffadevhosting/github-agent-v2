@@ -22,7 +22,7 @@ function decodeBase64Utf8(value: string): string {
 
 function headers(token: string): Record<string, string> {
   return {
-    Authorization: `Bearer ${token}`,
+    Authorization: `token ${token}`,
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
     "User-Agent": "cloudflare-github-agent-app",
@@ -40,19 +40,22 @@ async function ghFetch(token: string, path: string, options: RequestInit = {}): 
     try { parsed = JSON.parse(body); } catch {}
     throw new Error(parsed.message || `GitHub API ${res.status}: ${body}`);
   }
-  return res.status === 204 ? null : res.json();
+  if (res.status === 204) return null;
+
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) return res.json();
+  return res.text();
 }
 
 /**
  * Mengambil default branch asli dari repositori (misal: main, master, dev)
  */
 export async function getDefaultBranch(token: string, owner: string, repo: string): Promise<string> {
-  try {
-    const repoData = await ghFetch(token, `/repos/${owner}/${repo}`);
-    return repoData.default_branch || "main";
-  } catch {
-    return "main";
+  const repoData = await ghFetch(token, `/repos/${owner}/${repo}`);
+  if (!repoData?.default_branch) {
+    throw new Error(`GitHub tidak mengembalikan default branch untuk ${owner}/${repo}.`);
   }
+  return repoData.default_branch;
 }
 
 /**

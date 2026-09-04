@@ -7,9 +7,9 @@ import { getGitHubAuthorizeUrl, createOAuthState, handleGitHubOAuthCallback } fr
 import { listUserRepositories, getRepoTree, getFile } from "./github";
 
 const corsHeaders: HeadersInit = {
-  "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  Vary: "Origin",
 };
 
 function json(data: unknown, status = 200): Response {

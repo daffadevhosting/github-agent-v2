@@ -58,11 +58,15 @@ export async function processAgentMessage(
 async function executeIntent(
   env: Env,
   user: UserRecord,
-  intent: IntentResult,
+  intent: IntentResult | null | undefined,
   rawText: string,
   state: AgentState,
   conversationId: string = "default-session"
 ): Promise<{ reply: string; state: AgentState }> {
+  if (!intent || typeof intent.intent !== "string") {
+    throw new Error("Intent perintah tidak dapat ditentukan. Silakan coba lagi.");
+  }
+
   let { currentRepo, currentBranch } = state;
   const userEmail = user.email;
 
@@ -72,11 +76,7 @@ async function executeIntent(
 
   // Branch dinamis: jika belum ada di state, ambil default_branch asli repo dari GitHub
   if (currentRepo && ghToken && !currentBranch) {
-    try {
-      currentBranch = await github.getDefaultBranch(ghToken, owner, currentRepo);
-    } catch {
-      currentBranch = "main";
-    }
+    currentBranch = await github.getDefaultBranch(ghToken, owner, currentRepo);
   }
   if (!currentBranch) currentBranch = "main";
 

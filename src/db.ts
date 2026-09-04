@@ -60,13 +60,17 @@ export async function upsertGitHubUser(
   }
 
   const id = crypto.randomUUID();
-  await db
-    .prepare(
-      `INSERT INTO users (id, email, name, github_username, github_token, avatar_url, password_hash, salt, created_at, updated_at) 
-       VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`
-    )
-    .bind(id, emailNorm, data.name, data.githubUsername, data.githubToken, data.avatarUrl || null, now, now)
-    .run();
+  try {
+    await db
+      .prepare(
+        `INSERT INTO users (id, email, name, github_username, github_token, avatar_url, password_hash, salt, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`
+      )
+      .bind(id, emailNorm, data.name, data.githubUsername, data.githubToken, data.avatarUrl || null, now, now)
+      .run();
+  } catch (error) {
+    throw new Error(`Gagal menyimpan pengguna GitHub ${emailNorm}.`, { cause: error });
+  }
 
   await db
     .prepare("INSERT OR REPLACE INTO user_states (email, current_repo, current_branch, updated_at) VALUES (?, '', 'main', ?)")
