@@ -1101,7 +1101,7 @@
             <label for="login-password">
               <i data-lucide="lock" style="width: 14px; height: 14px;"></i> Password
             </label>
-            <input id="login-password" type="password" placeholder="Ã¢ÂÂ¢Ã¢ÂÂ¢Ã¢ÂÂ¢Ã¢ÂÂ¢Ã¢ÂÂ¢Ã¢ÂÂ¢Ã¢ÂÂ¢Ã¢ÂÂ¢" required minlength="6" autocomplete="current-password" />
+            <input id="login-password" type="password" placeholder="••••••••" required minlength="6" autocomplete="current-password" />
           </div>
           <button class="btn-primary" type="submit" id="login-btn">
             <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i> Masuk
@@ -1281,12 +1281,12 @@
           </div>
 
           <div class="input-shell">
-            <textarea id="input" rows="1" placeholder="Tulis instruksi perbaikan atau tanya apa saja tentang repo iniÃ¢ÂÂ¦" autocomplete="off"></textarea>
+            <textarea id="input" rows="1" placeholder="Tulis instruksi perbaikan atau tanya apa saja tentang repo ini…" autocomplete="off"></textarea>
             <button id="send" type="button" disabled title="Tulis pesan terlebih dahulu">
               <i data-lucide="send" style="width: 16px; height: 16px;"></i>
             </button>
           </div>
-          <div class="input-hint">Enter untuk kirim ÃÂ· Shift+Enter baris baru ÃÂ· Klik file di sidebar untuk auto-inject</div>
+          <div class="input-hint">Enter untuk kirim · Shift+Enter baris baru · Klik file di sidebar untuk auto-inject</div>
         </div>
       </main>
     </div>
@@ -1453,7 +1453,7 @@
       hideAuthError();
       const btn = document.getElementById("login-btn");
       btn.disabled = true;
-      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> MasukÃ¢ÂÂ¦`;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Masuk…`;
       try {
         const data = await apiRequest("/auth/login", "POST", {
           email: document.getElementById("login-email").value,
@@ -1475,7 +1475,7 @@
       hideAuthError();
       const btn = document.getElementById("reg-btn");
       btn.disabled = true;
-      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Membuat akunÃ¢ÂÂ¦`;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Membuat akun…`;
       try {
         const data = await apiRequest("/auth/register", "POST", {
           name: document.getElementById("reg-name").value,
@@ -1665,8 +1665,8 @@
       const maxShow = 40;
       const list = (files || []).slice(0, maxShow);
       const lines = [];
-      lines.push(`Ã°ÂÂÂ **Repo aktif:** \`${fullName}\``);
-      lines.push(`Ã°ÂÂÂ¿ **Branch:** \`${branch}\``);
+      lines.push(`📂 **Repo aktif:** \`${fullName}\``);
+      lines.push(`🌿 **Branch:** \`${branch}\``);
       lines.push("");
       if (!list.length) {
         lines.push("_Repositori ini masih kosong._");
@@ -1682,7 +1682,7 @@
         }
         lines.push("");
         if (total > maxShow) {
-          lines.push(`_Ã¢ÂÂ¦dan ${total - maxShow} file lainnya. Klik file di sidebar untuk memuat isinya ke chat._`);
+          lines.push(`_…dan ${total - maxShow} file lainnya. Klik file di sidebar untuk memuat isinya ke chat._`);
         } else {
           lines.push("_Klik file di sidebar untuk memuat isinya ke chat._");
         }
@@ -1799,7 +1799,7 @@
     btnClearContext.addEventListener("click", () => {
       activeContext = null;
       updateContextBanner();
-      addMessage("system", "Ã¢ÂÂ¹Ã¯Â¸Â Konteks aktif telah dibersihkan.");
+      addMessage("system", "ℹ️ Konteks aktif telah dibersihkan.");
     });
 
     btnInjectFullRepo.addEventListener("click", () => {
@@ -1925,7 +1925,7 @@
       });
     }
 
-    function showThinking(label = "Memproses & mengeksekusiÃ¢ÂÂ¦") {
+    function showThinking(label = "Memproses & mengeksekusi…") {
       removeThinking();
       clearEmpty();
       const row = document.createElement("div");
