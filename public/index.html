@@ -823,6 +823,20 @@
       font-size: 12px;
     }
 
+    .platform-input:focus,
+    .platform-select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.12);
+    }
+
+    .ai-fix-prompt-hint {
+      margin-top: 8px;
+      color: var(--text-muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
     .platform-actions {
       display: flex;
       flex-wrap: wrap;
@@ -1716,6 +1730,31 @@
     </div>
   </div>
 
+  <div class="platform-panel" id="ai-fix-prompt-panel" role="dialog" aria-modal="true" aria-labelledby="ai-fix-prompt-title">
+    <div class="platform-card" style="width:min(560px, 100%);">
+      <div class="platform-card-header">
+        <div>
+          <h2 id="ai-fix-prompt-title">Instruksi AI Fix</h2>
+          <p>Jelaskan perubahan yang ingin diterapkan pada file aktif.</p>
+        </div>
+        <button class="btn-icon" id="ai-fix-prompt-close" type="button" aria-label="Tutup">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="platform-card-body">
+        <textarea class="platform-input" id="ai-fix-prompt-input" rows="6"
+          placeholder="Contoh: Perbaiki validasi input, pertahankan API yang ada, dan tambahkan penanganan error yang jelas."></textarea>
+        <p class="ai-fix-prompt-hint">AI akan mengubah isi editor dan menampilkan diff. Perubahan belum di-commit sampai kamu menekan tombol Commit.</p>
+        <div class="platform-actions" style="justify-content:flex-end; margin-top:16px;">
+          <button class="platform-btn" id="ai-fix-prompt-cancel" type="button">Batal</button>
+          <button class="platform-btn primary" id="ai-fix-prompt-submit" type="button">
+            <i data-lucide="wand-sparkles"></i> Jalankan AI Fix
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const TOKEN_KEY = "ga_token";
     const USER_KEY = "ga_user";
@@ -1753,6 +1792,9 @@
     const editorFileName = document.getElementById("editor-file-name");
     const editorDiff = document.getElementById("editor-diff");
     const monacoContainer = document.getElementById("monaco-container");
+    const aiFixPromptPanel = document.getElementById("ai-fix-prompt-panel");
+    const aiFixPromptInput = document.getElementById("ai-fix-prompt-input");
+    const aiFixPromptSubmit = document.getElementById("ai-fix-prompt-submit");
     let monacoEditor = null;
     let editorOriginalContent = "";
     let editorFile = null;
@@ -1794,6 +1836,34 @@
 
     function closePanel(id) {
       document.getElementById(id)?.classList.remove("open");
+    }
+
+    function requestAiFixPrompt() {
+      return new Promise((resolve) => {
+        const finish = (value) => {
+          aiFixPromptPanel.classList.remove("open");
+          aiFixPromptInput.value = "";
+          document.removeEventListener("keydown", onKeyDown);
+          resolve(value);
+        };
+        const onKeyDown = (event) => {
+          if (event.key === "Escape") finish(null);
+          if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+            event.preventDefault();
+            finish(aiFixPromptInput.value.trim() || null);
+          }
+        };
+        aiFixPromptSubmit.onclick = () => finish(aiFixPromptInput.value.trim() || null);
+        document.getElementById("ai-fix-prompt-cancel").onclick = () => finish(null);
+        document.getElementById("ai-fix-prompt-close").onclick = () => finish(null);
+        aiFixPromptPanel.onclick = (event) => {
+          if (event.target === aiFixPromptPanel) finish(null);
+        };
+        aiFixPromptPanel.classList.add("open");
+        renderIcons();
+        document.addEventListener("keydown", onKeyDown);
+        requestAnimationFrame(() => aiFixPromptInput.focus());
+      });
     }
 
     function currentRepoInfo() {
@@ -2513,7 +2583,7 @@
 
     document.getElementById("editor-ai-fix").addEventListener("click", async () => {
       if (!editorFile || !selectedRepo) return;
-      const instruction = window.prompt("Apa yang ingin diperbaiki atau dibuat oleh AI?", "Perbaiki bug dan pertahankan API yang ada.");
+      const instruction = await requestAiFixPrompt();
       if (!instruction) return;
       try {
         const info = currentRepoInfo();
