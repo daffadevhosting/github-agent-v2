@@ -17,6 +17,7 @@ export interface Env {
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   DEEPSEEK_API_KEY?: string;
+  BYOK_ENCRYPTION_KEY?: string;
 }
 
 export interface VectorizeIndex {
@@ -59,4 +60,17 @@ export interface UserRecord {
   salt?: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+export type PlanName = "free" | "pro" | "team";
+
+export interface UsageState {
+  plan: PlanName;
+  aiRequests: number;
+  indexedRepos: number;
+  aiRequestLimit: number;
+  indexedRepoLimit: number;
+  provider: string;
+  subscriptionStatus: string;
+  subscriptionExpiresAt: number | null;
 }

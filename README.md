@@ -140,8 +140,27 @@ The collaboration foundation is exposed at
 `GET /api/collaboration/<room>` and requires the `COLLABORATION_ROOM` Durable
 Object binding. Midtrans notifications are received at
 `POST /api/billing/midtrans/webhook` and require the `MIDTRANS_SERVER_KEY`
-secret. Payment state persistence and plan enforcement are intentionally kept
-behind the billing layer until the production subscription schema is chosen.
+secret. Production plan enforcement uses the D1 migration in
+`migrations/0001_platform.sql`; apply it with:
+
+```sh
+npx wrangler d1 migrations apply github-agent-db --remote
+```
+
+The server enforces monthly AI request and indexed-repository limits through
+`GET /api/usage`. Provider settings are managed through authenticated
+`/api/provider` endpoints. BYOK keys are encrypted with `BYOK_ENCRYPTION_KEY`
+(or `AUTH_SECRET` as fallback) and are never returned to the browser. Configure
+the dedicated secret in production:
+
+```sh
+npx wrangler secret put BYOK_ENCRYPTION_KEY
+```
+
+Editor commits require a short-lived server-issued approval token from
+`POST /api/repo/preview`; direct PUT requests without a valid token are
+rejected. Midtrans webhook payloads should include the account email and plan
+metadata so verified settlement can activate the subscription.
 
 ## Project Structure
 

@@ -1,6 +1,17 @@
 import type { Env, UserRecord } from "./types";
 import { hashPassword, verifyPassword, issueToken, verifyToken, extractBearer } from "./users";
-import { getUserByEmail, createManualUser, getUserState, saveUserState } from "./db";
+import {
+  getUserByEmail,
+  createManualUser,
+  getUserState,
+  saveUserState,
+  consumeAiRequest,
+  getUsageState,
+  reserveIndexedRepository,
+  getProviderSettings,
+  updateProviderSettings,
+  updateSubscription,
+} from "./db";
 import { processAgentMessage } from "./agent-executor";
 import { verifyAccess } from "./auth";
 import { getGitHubAuthorizeUrl, createOAuthState, handleGitHubOAuthCallback } from "./oauth";
@@ -8,6 +19,7 @@ import { listUserRepositories, getRepoTree, getFile, createOrUpdateFile } from "
 import { indexRepositoryFiles, searchRepository } from "./rag";
 import { CollaborationRoom } from "./collaboration";
 import { verifyMidtransSignature } from "./billing";
+import { encryptProviderKey, type ProviderName } from "./providers";
 
 const corsHeaders: HeadersInit = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -20,6 +32,57 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json", ...corsHeaders },
   });
+}
+
+function base64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function fromBase64Url(value: string): Uint8Array {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((value.length + 3) % 4);
+  return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+}
+
+async function approvalSignature(env: Env, payload: string): Promise<string> {
+  if (!env.AUTH_SECRET || env.AUTH_SECRET.length < 32) throw new Error("AUTH_SECRET wajib dikonfigurasi.");
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(env.AUTH_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign", "verify"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
+  return base64Url(new Uint8Array(signature));
+}
+
+async function createApprovalToken(env: Env, claims: Record<string, unknown>): Promise<string> {
+  const encoded = base64Url(new TextEncoder().encode(JSON.stringify(claims)));
+  return `${encoded}.${await approvalSignature(env, encoded)}`;
+}
+
+async function verifyApprovalToken(env: Env, token: string, expected: Record<string, unknown>): Promise<boolean> {
+  const [encoded, signature] = token.split(".");
+  if (!encoded || !signature) return false;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(env.AUTH_SECRET || ""),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"]
+  );
+  const valid = await crypto.subtle.verify(
+    "HMAC",
+    key,
+    fromBase64Url(signature).buffer as ArrayBuffer,
+    new TextEncoder().encode(encoded)
+  );
+  if (!valid) return false;
+  const claims = JSON.parse(new TextDecoder().decode(fromBase64Url(encoded))) as Record<string, unknown>;
+  return Number(claims.exp) > Date.now()
+    && Object.entries(expected).every(([keyName, value]) => claims[keyName] === value);
 }
 
 async function getAuthenticatedUser(request: Request, env: Env): Promise<UserRecord | null> {
@@ -262,13 +325,26 @@ export default {
         message?: string;
         baseSha?: string;
         approved?: boolean;
+        approvalToken?: string;
       };
       const owner = body.owner || user.githubUsername || env.GITHUB_OWNER;
       if (!owner || !body.repo || !body.branch || !body.path || typeof body.content !== "string") {
         return json({ error: "Owner, repo, branch, path, dan content wajib disertakan." }, 400);
       }
-      if (!body.approved) return json({ error: "Perubahan harus direview dan disetujui sebelum commit." }, 428);
+      if (!body.approvalToken) return json({ error: "Perubahan harus direview dan disetujui sebelum commit." }, 428);
       try {
+        const contentHash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body.content));
+        const hash = Array.from(new Uint8Array(contentHash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+        const approved = await verifyApprovalToken(env, body.approvalToken, {
+          email: user.email,
+          owner,
+          repo: body.repo,
+          branch: body.branch,
+          path: body.path,
+          baseSha: body.baseSha || "",
+          contentHash: hash,
+        });
+        if (!approved) return json({ error: "Approval diff tidak valid atau sudah kedaluwarsa." }, 428);
         const result = await createOrUpdateFile(
           token,
           owner,
@@ -283,6 +359,31 @@ export default {
         return json({ saved: true, path: body.path, branch: body.branch, commit: result?.commit || null });
       } catch (err: any) {
         return json({ error: err.message || "Gagal menyimpan file." }, 500);
+      }
+    }
+
+    if (path === "/api/repo/preview" && request.method === "POST") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      const token = user.githubToken || env.GITHUB_TOKEN;
+      const body = (await request.json().catch(() => ({}))) as {
+        owner?: string; repo?: string; branch?: string; path?: string; content?: string;
+      };
+      const owner = body.owner || user.githubUsername || env.GITHUB_OWNER;
+      if (!token || !owner || !body.repo || !body.branch || !body.path || typeof body.content !== "string") {
+        return json({ error: "Owner, repo, branch, path, dan content wajib disertakan." }, 400);
+      }
+      try {
+        const current = await getFile(token, owner, body.repo, body.path, body.branch);
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body.content));
+        const contentHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+        const approvalToken = await createApprovalToken(env, {
+          email: user.email, owner, repo: body.repo, branch: body.branch, path: body.path,
+          baseSha: current.sha, contentHash, exp: Date.now() + 10 * 60 * 1000,
+        });
+        return json({ approved: true, baseSha: current.sha, approvalToken, expiresIn: 600 });
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal membuat preview perubahan." }, 409);
       }
     }
 
@@ -315,6 +416,11 @@ export default {
       const token = user.githubToken || env.GITHUB_TOKEN;
       if (!owner || !repo || !token) return json({ error: "Owner, repo, dan koneksi GitHub wajib tersedia." }, 400);
       const branch = body.branch || await (await import("./github")).getDefaultBranch(token, owner, repo);
+      try {
+        await reserveIndexedRepository(env.DB, user.email, owner, repo, branch);
+      } catch (err: any) {
+        return json({ error: err.message || "Batas repository terindeks tercapai." }, 402);
+      }
       const paths = await (await import("./github")).listFiles(token, owner, repo, branch);
       const sourcePaths = paths
         .filter((path) => !/(^|\/)(node_modules|dist|build|vendor)\//.test(path))
@@ -335,6 +441,35 @@ export default {
       } catch (err: any) {
         return json({ error: err.message || "Gagal mengindeks repository." }, 500);
       }
+    }
+
+    if (path === "/api/usage" && request.method === "GET") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      return json({ usage: await getUsageState(env.DB, user.email) });
+    }
+
+    if (path === "/api/provider" && request.method === "GET") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      const settings = await getProviderSettings(env.DB, user.email);
+      return json({ provider: settings.provider, hasApiKey: !!settings.encryptedKey });
+    }
+
+    if (path === "/api/provider" && request.method === "PUT") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      const body = (await request.json().catch(() => ({}))) as { provider?: ProviderName; apiKey?: string };
+      const provider = body.provider || "workers-ai";
+      if (!["workers-ai", "openai", "anthropic", "deepseek"].includes(provider)) {
+        return json({ error: "Provider tidak didukung." }, 400);
+      }
+      if (provider !== "workers-ai" && !body.apiKey) {
+        return json({ error: "API key wajib diisi untuk provider eksternal." }, 400);
+      }
+      const encrypted = body.apiKey ? await encryptProviderKey(env, body.apiKey.trim()) : null;
+      await updateProviderSettings(env.DB, user.email, provider, encrypted?.encrypted || null, encrypted?.iv || null);
+      return json({ saved: true, provider, hasApiKey: !!encrypted });
     }
 
     if (path === "/api/repo/search" && request.method === "POST") {
@@ -391,7 +526,15 @@ export default {
           body.signature_key
         );
         if (!valid) return json({ error: "Signature Midtrans tidak valid." }, 401);
-        return json({ accepted: true, transactionStatus: body.transaction_status || "unknown" });
+        const email = (body as any).email || (body as any).customer_details?.email;
+        const status = body.transaction_status || "unknown";
+        if (email && (status === "settlement" || status === "capture")) {
+          const plan = String((body as any).plan || "pro") as "pro" | "team";
+          if (plan === "pro" || plan === "team") {
+            await updateSubscription(env.DB, email, plan, status, Date.now() + 30 * 24 * 60 * 60 * 1000);
+          }
+        }
+        return json({ accepted: true, transactionStatus: status });
       } catch (err: any) {
         return json({ error: err.message || "Webhook billing belum dikonfigurasi." }, 503);
       }
@@ -417,10 +560,12 @@ export default {
           await saveUserState(env.DB, user.email, stateUpdate);
         }
 
+        await consumeAiRequest(env.DB, user.email);
         const result = await processAgentMessage(env, user, message);
         return json(result);
       } catch (err: any) {
-        return json({ error: err.message || "Gagal memproses pesan" }, 500);
+        const message = err.message || "Gagal memproses pesan";
+        return json({ error: message }, message.includes("Batas AI") ? 402 : 500);
       }
     }
 

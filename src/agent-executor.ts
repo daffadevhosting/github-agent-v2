@@ -2,9 +2,10 @@ import { tracing } from "cloudflare:workers";
 import type { Env, AgentState, UserRecord } from "./types";
 import { detectIntent, type IntentResult, AGENT_NAME, AGENT_ID, extractText } from "./intent";
 import * as github from "./github";
-import { getUserState, saveUserState, logChatMessage, getUserByEmail } from "./db";
+import { getUserState, saveUserState, logChatMessage, getUserByEmail, getProviderSettings } from "./db";
 import { searchDuckDuckGo } from "./search";
 import { buildRepositoryContext } from "./rag";
+import { decryptProviderKey, resolveProvider, runProvider, type ProviderName } from "./providers";
 
 const MODEL = "@cf/openai/gpt-oss-120b";
 
@@ -459,18 +460,22 @@ async function executeIntent(
           span.setAttribute("gen_ai.conversation.id", conversationId);
           span.setAttribute("gen_ai.request.model", MODEL);
 
-          return env.AI.run(MODEL as any, {
-            messages: [
-              { role: "system", content: contextualSystemPrompt },
-              { role: "user", content: prompt },
-            ],
-            max_tokens: 1400,
+          const providerSettings = await getProviderSettings(env.DB, userEmail);
+          let userApiKey: string | undefined;
+          if (providerSettings.encryptedKey && providerSettings.iv) {
+            userApiKey = await decryptProviderKey(env, providerSettings.encryptedKey, providerSettings.iv);
+          }
+          const provider = resolveProvider(env, providerSettings.provider as ProviderName, userApiKey);
+          span.setAttribute("gen_ai.request.model", provider.model);
+          return runProvider(env, provider, [
+                { role: "system", content: contextualSystemPrompt },
+                { role: "user", content: prompt },
+              ], 1400);
           });
-        });
 
-        const replyText =
-          extractText(aiRes) ||
-          "Halo! Ada yang bisa saya bantu terkait repositori GitHub atau pembuatan skrip coding?";
+          const replyText =
+            String(aiRes || "") ||
+            "Halo! Ada yang bisa saya bantu terkait repositori GitHub atau pembuatan skrip coding?";
         return { reply: replyText, state };
       } catch (err: any) {
         return {

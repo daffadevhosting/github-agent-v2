@@ -1,7 +1,7 @@
 interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   first<T = Record<string, unknown>>(): Promise<T | null>;
-  run(): Promise<unknown>;
+  run(): Promise<any>;
 }
 
 interface D1Database {

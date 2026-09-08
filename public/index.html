@@ -2396,7 +2396,19 @@
     indexRepoBtn.addEventListener("click", indexSelectedRepo);
     searchCodebaseBtn.addEventListener("click", () => openPanel("search-panel"));
     collabBtn.addEventListener("click", openCollaboration);
-    settingsBtn.addEventListener("click", () => openPanel("settings-panel"));
+    settingsBtn.addEventListener("click", async () => {
+      openPanel("settings-panel");
+      try {
+        const [provider, usage] = await Promise.all([apiRequest("/api/provider"), apiRequest("/api/usage")]);
+        document.getElementById("provider-select").value = provider.provider || "workers-ai";
+        const state = usage.usage;
+        document.getElementById("current-plan-label").textContent = String(state.plan || "free").toUpperCase();
+        document.getElementById("usage-label").textContent = `${state.aiRequests} / ${state.aiRequestLimit} AI request bulan ini`;
+        document.getElementById("usage-bar-fill").style.width = `${Math.min(100, (state.aiRequests / state.aiRequestLimit) * 100)}%`;
+      } catch (err) {
+        addMessage("error", err.message);
+      }
+    });
 
     document.querySelectorAll("[data-close-panel]").forEach((button) => {
       button.addEventListener("click", () => closePanel(button.dataset.closePanel));
@@ -2417,10 +2429,17 @@
       }
     });
 
-    document.getElementById("save-provider-btn").addEventListener("click", () => {
-      localStorage.setItem("ga_provider", document.getElementById("provider-select").value);
-      addMessage("system", "⚙️ Preferensi provider tersimpan untuk sesi browser ini.");
-      closePanel("settings-panel");
+    document.getElementById("save-provider-btn").addEventListener("click", async () => {
+      try {
+        const provider = document.getElementById("provider-select").value;
+        const apiKey = document.getElementById("provider-key-input").value.trim();
+        await apiRequest("/api/provider", "PUT", { provider, apiKey: apiKey || undefined });
+        document.getElementById("provider-key-input").value = "";
+        addMessage("system", "⚙️ Provider tersimpan aman di server. API key tidak disimpan di browser.");
+        closePanel("settings-panel");
+      } catch (err) {
+        addMessage("error", err.message);
+      }
     });
 
     document.getElementById("upgrade-plan-btn").addEventListener("click", () => {
@@ -2453,14 +2472,20 @@
         }
         renderSimpleDiff(editorOriginalContent, content);
         if (!window.confirm("Sudah meninjau diff? Commit perubahan ini ke branch aktif?")) return;
+        const approval = await apiRequest("/api/repo/preview", "POST", {
+          ...info,
+          path: editorFile.path,
+          content,
+        });
         await apiRequest("/api/repo/file", "PUT", {
           ...info,
           path: editorFile.path,
           content,
           message: `Update ${editorFile.path} via Pro Editor`,
-          baseSha: editorFile.sha,
-          approved: true,
+          baseSha: approval.baseSha,
+          approvalToken: approval.approvalToken,
         });
+        editorFile.sha = approval.baseSha;
         editorOriginalContent = content;
         editorDiff.classList.remove("open");
         addMessage("system", `✅ **${editorFile.path}** berhasil di-commit ke branch **${info.branch}**.`);

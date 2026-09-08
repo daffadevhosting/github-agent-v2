@@ -1,4 +1,155 @@
 import type { UserRecord, AgentState } from "./types";
+import type { PlanName, UsageState } from "./types";
+import { PLAN_LIMITS } from "./billing";
+
+let schemaReady: Promise<void> | null = null;
+
+export async function ensurePlatformSchema(db: D1Database): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = (async () => {
+      await db.prepare(`CREATE TABLE IF NOT EXISTS account_entitlements (
+          email TEXT PRIMARY KEY,
+          plan TEXT NOT NULL DEFAULT 'free',
+          period_start INTEGER NOT NULL,
+          ai_requests INTEGER NOT NULL DEFAULT 0,
+          provider TEXT NOT NULL DEFAULT 'workers-ai',
+          subscription_status TEXT NOT NULL DEFAULT 'inactive',
+          subscription_expires_at INTEGER,
+          encrypted_provider_key TEXT,
+          provider_key_iv TEXT,
+          updated_at INTEGER NOT NULL
+        )`).run();
+      await db.prepare(`CREATE TABLE IF NOT EXISTS indexed_repositories (
+          email TEXT NOT NULL,
+          owner TEXT NOT NULL,
+          repo TEXT NOT NULL,
+          branch TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (email, owner, repo, branch)
+        )`).run();
+      await db.prepare("CREATE INDEX IF NOT EXISTS idx_indexed_repositories_email ON indexed_repositories(email)").run();
+    })().catch((error) => {
+      schemaReady = null;
+      throw error;
+    });
+  }
+  await schemaReady;
+}
+
+export async function getUsageState(db: D1Database, email: string): Promise<UsageState> {
+  await ensurePlatformSchema(db);
+  const normalized = email.toLowerCase();
+  const now = Date.now();
+  const row = await db.prepare("SELECT * FROM account_entitlements WHERE email = ?").bind(normalized).first<any>();
+  if (!row) {
+    await db.prepare(
+      `INSERT INTO account_entitlements
+       (email, plan, period_start, ai_requests, provider, subscription_status, updated_at)
+       VALUES (?, 'free', ?, 0, 'workers-ai', 'inactive', ?)`
+    ).bind(normalized, now, now).run();
+    return getUsageState(db, normalized);
+  }
+  let plan = (row.plan in PLAN_LIMITS ? row.plan : "free") as PlanName;
+  const periodStart = Number(row.period_start || now);
+  const month = 30 * 24 * 60 * 60 * 1000;
+  if (now - periodStart >= month) {
+    await db.prepare("UPDATE account_entitlements SET period_start = ?, ai_requests = 0, updated_at = ? WHERE email = ?")
+      .bind(now, now, normalized).run();
+    row.ai_requests = 0;
+  }
+  if (row.subscription_expires_at && Number(row.subscription_expires_at) <= now && plan !== "free") {
+    plan = "free";
+    await db.prepare(
+      "UPDATE account_entitlements SET plan = 'free', subscription_status = 'expired', updated_at = ? WHERE email = ?"
+    ).bind(now, normalized).run();
+  }
+  const indexed = await db.prepare("SELECT COUNT(*) AS count FROM indexed_repositories WHERE email = ?")
+    .bind(normalized).first<{ count: number }>();
+  return {
+    plan,
+    aiRequests: Number(row.ai_requests || 0),
+    indexedRepos: Number(indexed?.count || 0),
+    aiRequestLimit: PLAN_LIMITS[plan].aiRequests,
+    indexedRepoLimit: PLAN_LIMITS[plan].indexedRepos,
+    provider: row.provider || "workers-ai",
+    subscriptionStatus: row.subscription_status || "inactive",
+    subscriptionExpiresAt: row.subscription_expires_at ? Number(row.subscription_expires_at) : null,
+  };
+}
+
+export async function consumeAiRequest(db: D1Database, email: string): Promise<UsageState> {
+  const current = await getUsageState(db, email);
+  if (current.aiRequests >= current.aiRequestLimit) {
+    throw new Error(`Batas AI paket ${current.plan} sudah tercapai. Upgrade paket untuk melanjutkan.`);
+  }
+  const result = await db.prepare(
+    "UPDATE account_entitlements SET ai_requests = ai_requests + 1, updated_at = ? WHERE email = ? AND ai_requests < ?"
+  ).bind(Date.now(), email.toLowerCase(), current.aiRequestLimit).run();
+  if (!(result as any).meta?.changes) throw new Error(`Batas AI paket ${current.plan} sudah tercapai.`);
+  return getUsageState(db, email);
+}
+
+export async function reserveIndexedRepository(
+  db: D1Database,
+  email: string,
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<UsageState> {
+  const current = await getUsageState(db, email);
+  const existing = await db.prepare(
+    "SELECT 1 FROM indexed_repositories WHERE email = ? AND owner = ? AND repo = ? AND branch = ?"
+  ).bind(email.toLowerCase(), owner, repo, branch).first();
+  if (existing) return current;
+  if (current.indexedRepos >= current.indexedRepoLimit) {
+    throw new Error(`Batas repository terindeks paket ${current.plan} sudah tercapai.`);
+  }
+  await db.prepare(
+    "INSERT OR IGNORE INTO indexed_repositories (email, owner, repo, branch, created_at) VALUES (?, ?, ?, ?, ?)"
+  ).bind(email.toLowerCase(), owner, repo, branch, Date.now()).run();
+  return getUsageState(db, email);
+}
+
+export async function updateProviderSettings(
+  db: D1Database,
+  email: string,
+  provider: string,
+  encryptedKey: string | null,
+  iv: string | null
+): Promise<void> {
+  await ensurePlatformSchema(db);
+  await db.prepare(
+    `INSERT INTO account_entitlements (email, period_start, provider, encrypted_provider_key, provider_key_iv, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(email) DO UPDATE SET provider = excluded.provider,
+       encrypted_provider_key = excluded.encrypted_provider_key, provider_key_iv = excluded.provider_key_iv,
+       updated_at = excluded.updated_at`
+  ).bind(email.toLowerCase(), Date.now(), provider, encryptedKey, iv, Date.now()).run();
+}
+
+export async function getProviderSettings(db: D1Database, email: string): Promise<{ provider: string; encryptedKey: string | null; iv: string | null }> {
+  await ensurePlatformSchema(db);
+  const row = await db.prepare(
+    "SELECT provider, encrypted_provider_key as encryptedKey, provider_key_iv as iv FROM account_entitlements WHERE email = ?"
+  ).bind(email.toLowerCase()).first<{ provider: string; encryptedKey: string | null; iv: string | null }>();
+  return { provider: row?.provider || "workers-ai", encryptedKey: row?.encryptedKey || null, iv: row?.iv || null };
+}
+
+export async function updateSubscription(
+  db: D1Database,
+  email: string,
+  plan: PlanName,
+  status: string,
+  expiresAt: number | null
+): Promise<void> {
+  await ensurePlatformSchema(db);
+  await db.prepare(
+    `INSERT INTO account_entitlements (email, plan, period_start, subscription_status, subscription_expires_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(email) DO UPDATE SET plan = excluded.plan, subscription_status = excluded.subscription_status,
+       subscription_expires_at = excluded.subscription_expires_at, updated_at = excluded.updated_at`
+  ).bind(email.toLowerCase(), plan, Date.now(), status, expiresAt, Date.now()).run();
+}
 
 /**
  * Mengambil data pengguna berdasarkan email

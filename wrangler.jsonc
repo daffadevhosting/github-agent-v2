@@ -20,7 +20,8 @@
 		{
 			"binding": "DB",
 			"database_name": "github-agent-db",
-			"database_id": "c264c4ae-5169-4a86-b6cf-df4f56635e49"
+			"database_id": "c264c4ae-5169-4a86-b6cf-df4f56635e49",
+			"migrations_dir": "migrations"
 		}
 	],
 	"durable_objects": {
