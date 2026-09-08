@@ -4,7 +4,7 @@ import { getUserByEmail, createManualUser, getUserState, saveUserState } from ".
 import { processAgentMessage } from "./agent-executor";
 import { verifyAccess } from "./auth";
 import { getGitHubAuthorizeUrl, createOAuthState, handleGitHubOAuthCallback } from "./oauth";
-import { listUserRepositories, getRepoTree, getFile } from "./github";
+import { listUserRepositories, getRepoTree, getFile, createOrUpdateFile } from "./github";
 import { indexRepositoryFiles, searchRepository } from "./rag";
 import { CollaborationRoom } from "./collaboration";
 import { verifyMidtransSignature } from "./billing";
@@ -245,6 +245,40 @@ export default {
         return json({ file });
       } catch (err: any) {
         return json({ error: err.message || "Gagal membaca isi file" }, 500);
+      }
+    }
+
+    if (path === "/api/repo/file" && request.method === "PUT") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      const token = user.githubToken || env.GITHUB_TOKEN;
+      if (!token) return json({ error: "Akun GitHub belum terhubung." }, 400);
+      const body = (await request.json().catch(() => ({}))) as {
+        owner?: string;
+        repo?: string;
+        branch?: string;
+        path?: string;
+        content?: string;
+        message?: string;
+      };
+      const owner = body.owner || user.githubUsername || env.GITHUB_OWNER;
+      if (!owner || !body.repo || !body.branch || !body.path || typeof body.content !== "string") {
+        return json({ error: "Owner, repo, branch, path, dan content wajib disertakan." }, 400);
+      }
+      try {
+        const result = await createOrUpdateFile(
+          token,
+          owner,
+          body.repo,
+          body.path,
+          body.content,
+          body.message || `Update ${body.path} via GitHub Agent`,
+          body.branch,
+          { name: user.name, email: user.email }
+        );
+        return json({ saved: true, path: body.path, branch: body.branch, commit: result?.commit || null });
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal menyimpan file." }, 500);
       }
     }
 
