@@ -452,28 +452,84 @@
     </div>
   </div>
 
-  <!-- CHAT SCREEN (sisa file tidak berubah) -->
   <div id="chat-screen" class="screen">
-    <!-- content omitted for brevity in commit preview; unchanged in repo -->
+    <div style="display:flex;flex-direction:column;height:100%;background:#0d0d0d;color:#ececec;">
+      <header style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #2a2a2a;background:#111;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#10a37f,#0d8c6d);display:flex;align-items:center;justify-content:center;font-weight:700;">G</div>
+          <div>
+            <div style="font-size:14px;font-weight:600;">GitHub Agent</div>
+            <div id="session-status" style="font-size:11px;color:#a0a0a0;">Session aktif</div>
+          </div>
+        </div>
+        <button id="logout-button" type="button" style="padding:8px 12px;border:1px solid #2a2a2a;border-radius:999px;background:transparent;color:#ececec;cursor:pointer;">Keluar</button>
+      </header>
+
+      <main style="flex:1;display:flex;align-items:center;justify-content:center;padding:32px;">
+        <div style="max-width:560px;width:100%;padding:32px 28px;border:1px solid #2a2a2a;border-radius:18px;background:#161616;box-shadow:0 4px 24px rgba(0,0,0,.35);">
+          <div style="font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#a0a0a0;margin-bottom:12px;">Status autentikasi</div>
+          <h2 id="welcome-title" style="font-size:28px;margin:0 0 12px;">Halo!</h2>
+          <p id="welcome-message" style="margin:0;line-height:1.6;color:#d9d9d9;">
+            Login berhasil. Agent sudah siap menerima instruksi dari GitHub dan chat Anda.
+          </p>
+          <div style="margin-top:22px;padding:12px 14px;border-radius:12px;background:rgba(16,163,127,.08);border:1px solid rgba(16,163,127,.2);color:#d3f7ed;">
+            <strong>GitHub:</strong> <span id="user-github">terhubung</span>
+          </div>
+        </div>
+      </main>
+    </div>
   </div>
 
   <script type="module">
-    import { bootstrapAuthSession, readStoredAuth } from './auth-session.js';
+    import { bootstrapAuthSession, readStoredAuth, clearAuth } from './auth-session.js';
 
-    const auth = bootstrapAuthSession();
-    if (auth && auth.user) {
+    function showAuthenticatedView(auth) {
       const authScreen = document.getElementById('auth-screen');
       const chatScreen = document.getElementById('chat-screen');
+      const welcomeTitle = document.getElementById('welcome-title');
+      const userGitHub = document.getElementById('user-github');
+      const sessionStatus = document.getElementById('session-status');
+      const welcomeMessage = document.getElementById('welcome-message');
+
+      if (welcomeTitle) {
+        const userName = auth?.user?.name || auth?.user?.email || 'Pengguna';
+        welcomeTitle.textContent = `Halo, ${userName}!`;
+      }
+
+      if (userGitHub) {
+        userGitHub.textContent = auth?.user?.githubUsername || auth?.user?.email || 'terhubung';
+      }
+
+      if (sessionStatus) {
+        sessionStatus.textContent = 'Session aktif';
+      }
+
+      if (welcomeMessage) {
+        welcomeMessage.textContent = 'Login berhasil. Agent sudah siap menerima instruksi dari GitHub dan chat Anda.';
+      }
+
       if (authScreen) authScreen.classList.remove('active');
       if (chatScreen) chatScreen.classList.add('active');
     }
 
-    const savedAuth = readStoredAuth();
-    if (savedAuth && savedAuth.user) {
-      window.__GITHUB_AGENT_AUTH__ = savedAuth;
+    function showLoginView() {
+      const authScreen = document.getElementById('auth-screen');
+      const chatScreen = document.getElementById('chat-screen');
+      if (authScreen) authScreen.classList.add('active');
+      if (chatScreen) chatScreen.classList.remove('active');
     }
 
-    // Tab switching logic (kept simple)
+    const auth = bootstrapAuthSession();
+    const savedAuth = readStoredAuth();
+    const activeAuth = auth || savedAuth;
+
+    if (activeAuth && activeAuth.user) {
+      window.__GITHUB_AGENT_AUTH__ = activeAuth;
+      showAuthenticatedView(activeAuth);
+    } else {
+      showLoginView();
+    }
+
     document.addEventListener('click', function(e){
       if (e.target.closest('.auth-tab')){
         var btn = e.target.closest('.auth-tab');
@@ -487,6 +543,12 @@
           document.getElementById('login-form').style.display = 'none';
           document.getElementById('register-form').style.display = '';
         }
+      }
+
+      if (e.target.closest('#logout-button')) {
+        clearAuth();
+        window.__GITHUB_AGENT_AUTH__ = null;
+        showLoginView();
       }
     });
   </script>
