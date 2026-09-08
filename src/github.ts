@@ -162,7 +162,8 @@ export async function createOrUpdateFile(
   content: string,
   message: string,
   branch?: string,
-  authorUser?: { name: string; email: string }
+  authorUser?: { name: string; email: string },
+  expectedSha?: string
 ): Promise<any> {
   const targetBranch = branch || (await getDefaultBranch(token, owner, repo));
   let sha: string | undefined;
@@ -171,6 +172,10 @@ export async function createOrUpdateFile(
     const existing = await ghFetch(token, `/repos/${owner}/${repo}/contents/${path}?ref=${targetBranch}`);
     sha = existing.sha;
   } catch {}
+
+  if (expectedSha && sha !== expectedSha) {
+    throw new Error(`File ${path} berubah di GitHub. Muat ulang file sebelum commit.`);
+  }
 
   const encoded = encodeBase64Utf8(content);
   const commitMessage = `${message}\n\nCo-authored-by: GitHub Agent <github-agent-bot@users.noreply.github.com>`;

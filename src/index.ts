@@ -260,11 +260,14 @@ export default {
         path?: string;
         content?: string;
         message?: string;
+        baseSha?: string;
+        approved?: boolean;
       };
       const owner = body.owner || user.githubUsername || env.GITHUB_OWNER;
       if (!owner || !body.repo || !body.branch || !body.path || typeof body.content !== "string") {
         return json({ error: "Owner, repo, branch, path, dan content wajib disertakan." }, 400);
       }
+      if (!body.approved) return json({ error: "Perubahan harus direview dan disetujui sebelum commit." }, 428);
       try {
         const result = await createOrUpdateFile(
           token,
@@ -274,7 +277,8 @@ export default {
           body.content,
           body.message || `Update ${body.path} via GitHub Agent`,
           body.branch,
-          { name: user.name, email: user.email }
+          { name: user.name, email: user.email },
+          body.baseSha
         );
         return json({ saved: true, path: body.path, branch: body.branch, commit: result?.commit || null });
       } catch (err: any) {

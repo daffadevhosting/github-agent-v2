@@ -2319,6 +2319,7 @@
           path: file.path,
           content
         });
+        file.sha = res.file?.sha || file.sha;
 
         inputEl.value = `Tolong periksa dan review file \`${file.path}\` berikut:\n\n\`\`\`${file.lang || 'text'}\n${content}\n\`\`\`\n\nApa ada bug atau perbaikan performa yang disarankan?`;
         inputEl.style.height = "auto";
@@ -2445,13 +2446,22 @@
       if (!editorFile || !selectedRepo) return;
       try {
         const info = currentRepoInfo();
+        const content = getEditorContent();
+        if (content === editorOriginalContent) {
+          addMessage("system", "ℹ️ Tidak ada perubahan untuk di-commit.");
+          return;
+        }
+        renderSimpleDiff(editorOriginalContent, content);
+        if (!window.confirm("Sudah meninjau diff? Commit perubahan ini ke branch aktif?")) return;
         await apiRequest("/api/repo/file", "PUT", {
           ...info,
           path: editorFile.path,
-          content: getEditorContent(),
+          content,
           message: `Update ${editorFile.path} via Pro Editor`,
+          baseSha: editorFile.sha,
+          approved: true,
         });
-        editorOriginalContent = getEditorContent();
+        editorOriginalContent = content;
         editorDiff.classList.remove("open");
         addMessage("system", `✅ **${editorFile.path}** berhasil di-commit ke branch **${info.branch}**.`);
       } catch (err) {
