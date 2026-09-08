@@ -14,6 +14,9 @@ export interface Env {
   GITHUB_TOKEN?: string;
   GITHUB_OWNER?: string;
   MIDTRANS_SERVER_KEY?: string;
+  MIDTRANS_API_BASE?: string;
+  MIDTRANS_PRO_PRICE_IDR?: string;
+  APP_URL?: string;
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
   DEEPSEEK_API_KEY?: string;

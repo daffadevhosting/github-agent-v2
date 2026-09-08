@@ -157,6 +157,22 @@ the dedicated secret in production:
 npx wrangler secret put BYOK_ENCRYPTION_KEY
 ```
 
+Upgrade Pro uses `POST /api/billing/checkout` and Midtrans Snap. The Worker
+creates a server-side order, never trusts the browser for the amount, and
+activates the plan only after a verified Midtrans webhook. Configure sandbox
+or production with:
+
+```sh
+npx wrangler secret put MIDTRANS_SERVER_KEY
+npx wrangler secret put MIDTRANS_API_BASE
+npx wrangler secret put MIDTRANS_PRO_PRICE_IDR
+npx wrangler secret put APP_URL
+```
+
+Use `https://app.sandbox.midtrans.com` for `MIDTRANS_API_BASE` while testing
+and `https://app.midtrans.com` for production. Set the Midtrans HTTP
+notification URL to `https://<your-worker-domain>/api/billing/midtrans/webhook`.
+
 Editor commits require a short-lived server-issued approval token from
 `POST /api/repo/preview`; direct PUT requests without a valid token are
 rejected. Midtrans webhook payloads should include the account email and plan

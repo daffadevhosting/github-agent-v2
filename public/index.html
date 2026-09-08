@@ -2529,8 +2529,23 @@
       }
     });
 
-    document.getElementById("upgrade-plan-btn").addEventListener("click", () => {
-      addMessage("system", "💳 Upgrade Pro siap dihubungkan ke Midtrans setelah endpoint checkout subscription diaktifkan.");
+    document.getElementById("upgrade-plan-btn").addEventListener("click", async () => {
+      const button = document.getElementById("upgrade-plan-btn");
+      const original = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Menyiapkan pembayaran…`;
+      try {
+        const checkout = await apiRequest("/api/billing/checkout", "POST", { plan: "pro" });
+        if (!checkout.redirectUrl) throw new Error("Midtrans tidak mengembalikan URL pembayaran.");
+        window.open(checkout.redirectUrl, "_blank", "noopener,noreferrer");
+        addMessage("system", `💳 Checkout Pro dibuat dengan order **${checkout.orderId}**. Selesaikan pembayaran di tab Midtrans; paket akan aktif setelah notifikasi pembayaran terverifikasi.`);
+      } catch (err) {
+        addMessage("error", err.message);
+      } finally {
+        button.disabled = false;
+        button.innerHTML = original;
+        renderIcons();
+      }
     });
 
     document.getElementById("terminal-prompt-btn").addEventListener("click", () => {

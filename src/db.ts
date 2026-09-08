@@ -28,12 +28,47 @@ export async function ensurePlatformSchema(db: D1Database): Promise<void> {
           PRIMARY KEY (email, owner, repo, branch)
         )`).run();
       await db.prepare("CREATE INDEX IF NOT EXISTS idx_indexed_repositories_email ON indexed_repositories(email)").run();
+      await db.prepare(`CREATE TABLE IF NOT EXISTS payment_orders (
+        order_id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        plan TEXT NOT NULL,
+        gross_amount INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`).run();
     })().catch((error) => {
       schemaReady = null;
       throw error;
     });
   }
+
   await schemaReady;
+}
+
+export async function createPaymentOrder(
+  db: D1Database,
+  order: { orderId: string; email: string; plan: string; grossAmount: number }
+): Promise<void> {
+  await ensurePlatformSchema(db);
+  const now = Date.now();
+  await db.prepare(
+    `INSERT INTO payment_orders (order_id, email, plan, gross_amount, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'pending', ?, ?)`
+  ).bind(order.orderId, order.email.toLowerCase(), order.plan, order.grossAmount, now, now).run();
+}
+
+export async function getPaymentOrder(db: D1Database, orderId: string): Promise<{ email: string; plan: string; grossAmount: number; status: string } | null> {
+  await ensurePlatformSchema(db);
+  return db.prepare(
+    "SELECT email, plan, gross_amount as grossAmount, status FROM payment_orders WHERE order_id = ?"
+  ).bind(orderId).first();
+}
+
+export async function updatePaymentOrder(db: D1Database, orderId: string, status: string): Promise<void> {
+  await ensurePlatformSchema(db);
+  await db.prepare("UPDATE payment_orders SET status = ?, updated_at = ? WHERE order_id = ?")
+    .bind(status, Date.now(), orderId).run();
 }
 
 export async function getUsageState(db: D1Database, email: string): Promise<UsageState> {

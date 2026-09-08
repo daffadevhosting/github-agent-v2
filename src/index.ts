@@ -11,6 +11,9 @@ import {
   getProviderSettings,
   updateProviderSettings,
   updateSubscription,
+  createPaymentOrder,
+  getPaymentOrder,
+  updatePaymentOrder,
 } from "./db";
 import { processAgentMessage } from "./agent-executor";
 import { verifyAccess } from "./auth";
@@ -18,7 +21,7 @@ import { getGitHubAuthorizeUrl, createOAuthState, handleGitHubOAuthCallback } fr
 import { listUserRepositories, getRepoTree, getFile, createOrUpdateFile } from "./github";
 import { indexRepositoryFiles, searchRepository } from "./rag";
 import { CollaborationRoom } from "./collaboration";
-import { verifyMidtransSignature } from "./billing";
+import { createMidtransCheckout, getPlanPrice, verifyMidtransSignature } from "./billing";
 import { encryptProviderKey, type ProviderName } from "./providers";
 
 const corsHeaders: HeadersInit = {
@@ -472,6 +475,33 @@ export default {
       return json({ saved: true, provider, hasApiKey: !!encrypted });
     }
 
+    if (path === "/api/billing/checkout" && request.method === "POST") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      const body = (await request.json().catch(() => ({}))) as { plan?: "pro" | "team" };
+      const plan = body.plan || "pro";
+      if (plan !== "pro" && plan !== "team") return json({ error: "Paket pembayaran tidak valid." }, 400);
+      const current = await getUsageState(env.DB, user.email);
+      if (current.plan === plan && current.subscriptionExpiresAt && current.subscriptionExpiresAt > Date.now()) {
+        return json({ error: `Paket ${plan.toUpperCase()} masih aktif.` }, 409);
+      }
+      const orderId = `GA-${Date.now()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const amount = getPlanPrice(plan, env);
+      try {
+        await createPaymentOrder(env.DB, { orderId, email: user.email, plan, grossAmount: amount });
+        const checkout = await createMidtransCheckout(env, {
+          orderId,
+          email: user.email,
+          name: user.name,
+          plan,
+        });
+        return json({ orderId, plan, amount, ...checkout });
+      } catch (err: any) {
+        await updatePaymentOrder(env.DB, orderId, "checkout_failed");
+        return json({ error: err.message || "Gagal membuat checkout Midtrans." }, 502);
+      }
+    }
+
     if (path === "/api/repo/search" && request.method === "POST") {
       const user = await getAuthenticatedUser(request, env);
       if (!user) return json({ error: "Unauthorized" }, 401);
@@ -530,13 +560,15 @@ export default {
           body.signature_key
         );
         if (!valid) return json({ error: "Signature Midtrans tidak valid." }, 401);
-        const email = (body as any).email || (body as any).customer_details?.email;
         const status = body.transaction_status || "unknown";
-        if (email && (status === "settlement" || status === "capture")) {
-          const plan = String((body as any).plan || "pro") as "pro" | "team";
-          if (plan === "pro" || plan === "team") {
-            await updateSubscription(env.DB, email, plan, status, Date.now() + 30 * 24 * 60 * 60 * 1000);
-          }
+        const order = await getPaymentOrder(env.DB, body.order_id);
+        if (!order) return json({ error: "Order pembayaran tidak ditemukan." }, 404);
+        if (Number(body.gross_amount) !== order.grossAmount) {
+          return json({ error: "Nominal pembayaran tidak sesuai." }, 400);
+        }
+        await updatePaymentOrder(env.DB, body.order_id, status);
+        if ((status === "settlement" || status === "capture") && (order.plan === "pro" || order.plan === "team")) {
+          await updateSubscription(env.DB, order.email, order.plan, status, Date.now() + 30 * 24 * 60 * 60 * 1000);
         }
         return json({ accepted: true, transactionStatus: status });
       } catch (err: any) {
