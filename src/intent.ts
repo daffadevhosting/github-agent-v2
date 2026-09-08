@@ -217,9 +217,10 @@ function ruleDetectIntent(userMessage: string): IntentResult | null {
   // Issue: comment
   if (/(?:komentar|comment)\s+(?:issue|pr|pull\s*request)?\s*#?(\d+)/i.test(lower)) {
     const num = extractNumber(t);
+    const bodyMatch = t.match(/(?:comment|komentar)\s+(?:issue|pr|pull\s*request)?\s*#?\d+\s*[:,-]\s*(.+)$/i);
     return {
       intent: "comment_issue",
-      params: { number: num, body: t },
+      params: { number: num, body: bodyMatch?.[1]?.trim() },
       confidence: "rule",
     };
   }
@@ -378,7 +379,7 @@ function ruleDetectIntent(userMessage: string): IntentResult | null {
     const branchMatch = t.match(/(?:ke|menuju|to|dari|from)\s+([a-zA-Z0-9_\-./]+)/i);
     return {
       intent: "setup_branch",
-      params: { from: branchMatch ? branchMatch[1] : "main" },
+      params: { branch: branchMatch ? branchMatch[1] : "main" },
       confidence: "rule",
     };
   }

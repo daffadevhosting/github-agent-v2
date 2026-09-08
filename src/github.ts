@@ -286,9 +286,10 @@ export async function mergePullRequest(
   owner: string,
   repo: string,
   number: number,
+  method: "merge" | "squash" | "rebase" = "merge",
   commitMessage?: string
 ): Promise<any> {
-  const payload: Record<string, any> = {};
+  const payload: Record<string, any> = { merge_method: method };
   if (commitMessage) payload.commit_message = commitMessage;
   return ghFetch(token, `/repos/${owner}/${repo}/pulls/${number}/merge`, {
     method: "PUT",
@@ -342,6 +343,20 @@ export async function closeIssue(
   return ghFetch(token, `/repos/${owner}/${repo}/issues/${number}`, {
     method: "PATCH",
     body: JSON.stringify({ state: "closed" }),
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+export async function commentIssue(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number,
+  body: string
+): Promise<any> {
+  return ghFetch(token, `/repos/${owner}/${repo}/issues/${number}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
     headers: { "Content-Type": "application/json" },
   });
 }

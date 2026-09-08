@@ -28,6 +28,7 @@ package-lock.json
 dist/
 build/
 coverage/
+.github/copilot-instructions.md
 
 # Cloudflare / Wrangler
 .wrangler/

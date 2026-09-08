@@ -27,11 +27,10 @@ function base64ToBytes(value: string): Uint8Array {
 }
 
 function getJwtSecret(env: Env): Uint8Array {
-  // Prefer dedicated secret; fall back to a derived key from existing secrets
-  const raw =
-    (env as any).AUTH_SECRET ||
-    env.GITHUB_TOKEN ||
-    "github-agent-dev-secret-change-me";
+  const raw = env.AUTH_SECRET;
+  if (!raw || raw.length < 32) {
+    throw new Error("AUTH_SECRET wajib dikonfigurasi dan minimal 32 karakter.");
+  }
   return new TextEncoder().encode(raw.slice(0, 64).padEnd(32, "0"));
 }
 

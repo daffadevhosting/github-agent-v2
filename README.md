@@ -36,6 +36,9 @@ npx wrangler secret put GITHUB_TOKEN
 
 npx wrangler secret put GITHUB_OWNER
 # Type your GitHub username
+
+npx wrangler secret put AUTH_SECRET
+# Random secret minimal 32 karakter untuk signing session JWT
 ```
 
 ### 3. (Optional) Enable Cloudflare Access
@@ -110,7 +113,7 @@ Alternative models you can swap in `src/agent.ts` and `src/intent.ts`:
 ## Architecture
 
 ```
-User (WebSocket) → Worker (Access JWT check) → Durable Object (GitHubAgent)
+User (Web UI) → Worker (authentication and API routing) → D1/GitHub/Workers AI
   ├─ Intent Detection (rule + AI)
   ├─ GitHub API Client (repos, branches, files, PRs, issues)
   └─ Workers AI (file generation, code review, commit messages, chat)
@@ -120,12 +123,12 @@ User (WebSocket) → Worker (Access JWT check) → Durable Object (GitHubAgent)
 
 ```
 ├── src/
-│   ├── index.ts      # Worker entry point + Access auth
-│   ├── agent.ts      # Agent class (orchestration)
+│   ├── index.ts      # Worker entry point + authentication
+│   ├── agent-executor.ts # Agent orchestration and intent dispatch
 │   ├── intent.ts     # Intent detection (rule + AI)
 │   ├── github.ts     # GitHub API client
 │   ├── auth.ts       # Cloudflare Access JWT verification
-│   └── types.ts      # TypeScript types
+│   └── types.ts      # Environment and application types
 ├── public/
 │   └── index.html    # Flat minimal chat UI
 ├── wrangler.jsonc    # Wrangler config (AI, DO, Access dev)

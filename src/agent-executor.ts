@@ -84,7 +84,7 @@ async function executeIntent(
   const githubActions = [
     "create_repo", "create_branch", "delete_branch", "create_file", "edit_file",
     "get_file", "delete_file", "list_files", "create_pr", "list_prs", "merge_pr",
-    "create_issue", "list_issues", "close_issue", "review_code"
+    "create_issue", "list_issues", "close_issue", "comment_issue", "review_code"
   ];
 
   if (githubActions.includes(intent.intent) && !ghToken) {
@@ -108,7 +108,7 @@ async function executeIntent(
 
         const name = intent.params.name;
         if (!name) throw new Error("Nama repositori wajib ditentukan.");
-        const isPrivate = !!intent.params.private;
+        const isPrivate = !!(intent.params.isPrivate ?? intent.params.private);
         const res = await github.createRepo(ghToken!, name, isPrivate);
         const newState = await saveUserState(env.DB, userEmail, {
           currentRepo: name,
@@ -123,7 +123,7 @@ async function executeIntent(
 
     case "setup_branch": {
       const repo = intent.params.repo || currentRepo;
-      const branch = intent.params.branch || currentBranch;
+      const branch = intent.params.branch || intent.params.from || currentBranch;
       if (!repo) throw new Error("Tentukan nama repositori terlebih dahulu.");
       const newState = await saveUserState(env.DB, userEmail, { currentRepo: repo, currentBranch: branch });
       return {
@@ -145,9 +145,10 @@ async function executeIntent(
         const from = intent.params.from || currentBranch || "main";
         if (!branch) throw new Error("Nama branch baru wajib ditentukan.");
         await github.createBranch(ghToken!, owner, currentRepo, branch, from);
-        const newState = await saveUserState(env.DB, userEmail, { currentBranch: branch });
+        const actualBranch = github.formatAgentBranchName(branch);
+        const newState = await saveUserState(env.DB, userEmail, { currentBranch: actualBranch });
         return {
-          reply: `✅ Branch **${branch}** berhasil dibuat dari **${from}** pada repo **${currentRepo}**.`,
+          reply: `✅ Branch **${actualBranch}** berhasil dibuat dari **${from}** pada repo **${currentRepo}**.`,
           state: newState,
         };
       });
@@ -195,7 +196,10 @@ async function executeIntent(
       if (!currentRepo) throw new Error("Pilih repositori terlebih dahulu.");
       const number = intent.params.number;
       if (!number) throw new Error("Nomor PR wajib ditentukan (contoh: merge PR #3).");
-      const res = await github.mergePullRequest(ghToken!, owner, currentRepo, number, intent.params.message);
+      const method = ["merge", "squash", "rebase"].includes(intent.params.method)
+        ? intent.params.method
+        : "merge";
+      const res = await github.mergePullRequest(ghToken!, owner, currentRepo, number, method, intent.params.message);
       return { reply: `🔀 Pull Request **#${number}** berhasil di-merge: ${res.message || "Sukses"}`, state };
     }
 
@@ -226,15 +230,92 @@ async function executeIntent(
       return { reply: `🔒 Issue **#${number}** berhasil ditutup.`, state };
     }
 
+    case "comment_issue": {
+      if (!currentRepo) throw new Error("Pilih repositori terlebih dahulu.");
+      const number = intent.params.number;
+      const body = intent.params.body;
+      if (!number) throw new Error("Nomor issue wajib ditentukan.");
+      if (!body || body.trim() === rawText.trim()) {
+        throw new Error("Isi komentar wajib disertakan.");
+      }
+      await github.commentIssue(ghToken!, owner, currentRepo, number, body);
+      return { reply: `💬 Komentar berhasil ditambahkan ke issue **#${number}**.`, state };
+    }
+
+    case "delete_file": {
+      if (!currentRepo) throw new Error("Pilih repositori terlebih dahulu.");
+      const path = intent.params.path;
+      if (!path) throw new Error("Path file wajib ditentukan.");
+      await github.deleteFile(
+        ghToken!,
+        owner,
+        currentRepo,
+        path,
+        `Delete ${path} via GitHub Agent`,
+        currentBranch
+      );
+      return { reply: `🗑️ File **${path}** berhasil dihapus dari branch **${currentBranch}**.`, state };
+    }
+
     case "create_file":
     case "edit_file": {
       if (!currentRepo) throw new Error("Pilih repositori terlebih dahulu.");
       const path = intent.params.path;
-      const content = intent.params.content || intent.params.code || "";
       const message = intent.params.message || `Update ${path} via GitHub Agent`;
       if (!path) throw new Error("Path file wajib ditentukan (contoh: src/index.js).");
-      await github.createOrUpdateFile(ghToken!, owner, currentRepo, path, content, message, currentBranch);
-      return { reply: `📝 File **${path}** berhasil disimpan di branch **${currentBranch}** (${owner}/${currentRepo}).`, state };
+      const paths = intent.params.paths?.length ? intent.params.paths : [path];
+      const savedPaths: string[] = [];
+
+      for (const targetPath of paths) {
+        let content = intent.params.content || intent.params.code || "";
+        if (!content) {
+          let existingContent = "";
+          if (intent.intent === "edit_file") {
+            try {
+              const existing = await github.getFile(
+                ghToken!,
+                owner,
+                currentRepo,
+                targetPath,
+                currentBranch
+              );
+              existingContent = existing.content;
+            } catch (error) {
+              if (paths.length === 1) throw error;
+            }
+          }
+          const aiResult: any = await env.AI.run(MODEL as any, {
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You generate production-ready source files. Return only the complete file contents, without Markdown fences or explanations.",
+              },
+              {
+                role: "user",
+                content: `File: ${targetPath}\nInstruction: ${intent.params.instruction || rawText}\n\nCurrent file contents:\n${existingContent}`,
+              },
+            ],
+            max_tokens: 4000,
+          });
+          content = extractText(aiResult)
+            .replace(/^```[^\n]*\n?/, "")
+            .replace(/\n?```$/, "")
+            .trim();
+        }
+        if (!content) throw new Error(`AI tidak menghasilkan isi untuk file ${targetPath}.`);
+        await github.createOrUpdateFile(
+          ghToken!,
+          owner,
+          currentRepo,
+          targetPath,
+          content,
+          message,
+          currentBranch
+        );
+        savedPaths.push(targetPath);
+      }
+      return { reply: `📝 File **${savedPaths.join(", ")}** berhasil disimpan di branch **${currentBranch}** (${owner}/${currentRepo}).`, state };
     }
 
     case "get_file": {

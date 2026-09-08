@@ -57,11 +57,19 @@ export default {
       }
       const state = createOAuthState();
       const authUrl = getGitHubAuthorizeUrl(env, request, state);
-      return Response.redirect(authUrl, 302);
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: authUrl,
+          "Set-Cookie": `github_oauth_state=${state}; Max-Age=600; Path=/auth/github; HttpOnly; Secure; SameSite=Lax`,
+        },
+      });
     }
 
     if (path === "/auth/github/callback" && request.method === "GET") {
       const code = url.searchParams.get("code");
+      const state = url.searchParams.get("state");
+      const stateCookie = request.headers.get("Cookie")?.match(/(?:^|;\s*)github_oauth_state=([^;]+)/)?.[1];
       const error = url.searchParams.get("error_description") || url.searchParams.get("error");
 
       if (error) {
@@ -69,6 +77,9 @@ export default {
       }
       if (!code) {
         return Response.redirect(`${url.origin}/?error=Kode+autentikasi+tidak+ditemukan`, 302);
+      }
+      if (!state || !stateCookie || state !== stateCookie) {
+        return Response.redirect(`${url.origin}/?error=OAuth+state+tidak+valid`, 302);
       }
 
       try {
@@ -84,7 +95,13 @@ export default {
             },
           })
         );
-        return Response.redirect(`${url.origin}/#auth=${authPayload}`, 302);
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: `${url.origin}/#auth=${authPayload}`,
+            "Set-Cookie": "github_oauth_state=; Max-Age=0; Path=/auth/github; HttpOnly; Secure; SameSite=Lax",
+          },
+        });
       } catch (err: any) {
         return Response.redirect(`${url.origin}/?error=${encodeURIComponent(err.message || "Gagal login dengan GitHub")}`, 302);
       }
