@@ -457,7 +457,22 @@
     <!-- content omitted for brevity in commit preview; unchanged in repo -->
   </div>
 
-  <script>
+  <script type="module">
+    import { bootstrapAuthSession, readStoredAuth } from './auth-session.js';
+
+    const auth = bootstrapAuthSession();
+    if (auth && auth.user) {
+      const authScreen = document.getElementById('auth-screen');
+      const chatScreen = document.getElementById('chat-screen');
+      if (authScreen) authScreen.classList.remove('active');
+      if (chatScreen) chatScreen.classList.add('active');
+    }
+
+    const savedAuth = readStoredAuth();
+    if (savedAuth && savedAuth.user) {
+      window.__GITHUB_AGENT_AUTH__ = savedAuth;
+    }
+
     // Tab switching logic (kept simple)
     document.addEventListener('click', function(e){
       if (e.target.closest('.auth-tab')){
