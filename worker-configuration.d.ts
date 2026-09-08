@@ -16,6 +16,26 @@ interface Fetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
+interface DurableObjectState {}
+
+declare const WebSocketPair: {
+  new (): [WebSocket, WebSocket];
+};
+
+interface WebSocket {
+  accept(): void;
+}
+
+interface DurableObjectNamespace {
+  idFromName(name: string): unknown;
+  get(id: unknown): { fetch(request: Request): Promise<Response> };
+}
+
+interface VectorizeIndex {
+  upsert(vectors: unknown[]): Promise<unknown>;
+  query(vector: number[], options?: Record<string, unknown>): Promise<unknown>;
+}
+
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;

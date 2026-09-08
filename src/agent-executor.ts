@@ -4,6 +4,7 @@ import { detectIntent, type IntentResult, AGENT_NAME, AGENT_ID, extractText } fr
 import * as github from "./github";
 import { getUserState, saveUserState, logChatMessage, getUserByEmail } from "./db";
 import { searchDuckDuckGo } from "./search";
+import { buildRepositoryContext } from "./rag";
 
 const MODEL = "@cf/openai/gpt-oss-120b";
 
@@ -435,6 +436,19 @@ async function executeIntent(
 - Jika pengguna menyapa (seperti "Halo", "Hai", "Pagi"), balas dengan ramah dalam bahasa Indonesia dan tawarkan bantuan terkait GitHub/coding.
 - Jika pengguna meminta script/kode/tutorial atau pertanyaan teknis, jelaskan secara lengkap menggunakan Markdown dengan format blok kode (\`\`\`bahasa ... \`\`\`).
 - Jika ada [Hasil Pencarian Web Terkini], gunakan informasi tersebut untuk memberikan jawaban yang akurat.${searchContext}`;
+      let codebaseContext = "";
+      if (currentRepo && ghToken) {
+        try {
+          codebaseContext = await buildRepositoryContext(env, owner, currentRepo, currentBranch, prompt);
+        } catch (error) {
+          console.warn("RAG codebase context unavailable:", error);
+        }
+      }
+      const contextualSystemPrompt = `${systemPrompt}${
+        codebaseContext
+          ? `\n\n[Context Codebase Semantik]:\n${codebaseContext}\nGunakan context ini dan sebutkan path/line jika relevan.`
+          : ""
+      }`;
 
       try {
         // Metadata-only chat span for general chat model call
@@ -447,7 +461,7 @@ async function executeIntent(
 
           return env.AI.run(MODEL as any, {
             messages: [
-              { role: "system", content: systemPrompt },
+              { role: "system", content: contextualSystemPrompt },
               { role: "user", content: prompt },
             ],
             max_tokens: 1400,

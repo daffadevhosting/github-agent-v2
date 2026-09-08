@@ -1,55 +1,76 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "github-agent",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-07-17",
-  "compatibility_flags": ["nodejs_compat"],
-
-  // Static Assets Frontend (HTML/CSS/JS di folder public)
-  "assets": {
-    "directory": "public",
-    "binding": "ASSETS"
-  },
-
-  // Binding Workers AI
-  "ai": {
-    "binding": "AI"
-  },
-
-  // Binding Cloudflare D1 Database
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "github-agent-db",
-      "database_id": "c264c4ae-5169-4a86-b6cf-df4f56635e49"
-    }
-  ],
-
- "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["GitHubAgent"]
-    },
-    {
-      "tag": "v2",
-      "deleted_classes": ["GitHubAgent"]
-    }
-  ],
-
-  // Observabilitas & Tracing Cloudflare
-  "observability": {
-    "enabled": true,
-    "traces": {
-      "enabled": true
-    }
-  },
-
-  "access": {
-    "dev": {
-      "aud": "github-agent-local",
-      "identity": {
-        "email": "admin@agent.com"
-      }
-    }
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "github-agent",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-07-17",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	// Static Assets Frontend (HTML/CSS/JS di folder public)
+	"assets": {
+		"directory": "public",
+		"binding": "ASSETS"
+	},
+	// Binding Workers AI
+	"ai": {
+		"binding": "AI"
+	},
+	// Binding Cloudflare D1 Database
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "github-agent-db",
+			"database_id": "c264c4ae-5169-4a86-b6cf-df4f56635e49"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "COLLABORATION_ROOM",
+				"class_name": "CollaborationRoom"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"GitHubAgent"
+			]
+		},
+		{
+			"tag": "v2",
+			"deleted_classes": [
+				"GitHubAgent"
+			]
+		},
+		{
+			"tag": "v3",
+			"new_sqlite_classes": [
+				"CollaborationRoom"
+			]
+		}
+	],
+	// Observabilitas & Tracing Cloudflare
+	"observability": {
+		"enabled": true,
+		"traces": {
+			"enabled": true
+		}
+	},
+	"access": {
+		"dev": {
+			"aud": "github-agent-local",
+			"identity": {
+				"email": "admin@agent.com"
+			}
+		}
+	},
+	"vectorize": [
+		{
+			"binding": "VECTOR_INDEX",
+			"index_name": "github-agent-codebase",
+			"remote": true
+		}
+	]
 }

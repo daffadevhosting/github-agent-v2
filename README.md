@@ -119,6 +119,30 @@ User (Web UI) → Worker (authentication and API routing) → D1/GitHub/Workers 
   └─ Workers AI (file generation, code review, commit messages, chat)
 ```
 
+## Platform foundation
+
+Optional capabilities are isolated behind bindings and secrets so the core GitHub
+workflow continues to work without provisioning every service:
+
+```jsonc
+{
+  "vectorize": [
+    { "binding": "VECTOR_INDEX", "index_name": "github-agent-codebase" }
+  ]
+}
+```
+
+Create the Vectorize index with dimensions matching the embedding model before
+using `POST /api/repo/index` or `POST /api/repo/search`. The latter is also used
+automatically as context for general chat when the binding is available.
+
+The collaboration foundation is exposed at
+`GET /api/collaboration/<room>` and requires the `COLLABORATION_ROOM` Durable
+Object binding. Midtrans notifications are received at
+`POST /api/billing/midtrans/webhook` and require the `MIDTRANS_SERVER_KEY`
+secret. Payment state persistence and plan enforcement are intentionally kept
+behind the billing layer until the production subscription schema is chosen.
+
 ## Project Structure
 
 ```

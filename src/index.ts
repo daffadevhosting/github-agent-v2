@@ -5,6 +5,9 @@ import { processAgentMessage } from "./agent-executor";
 import { verifyAccess } from "./auth";
 import { getGitHubAuthorizeUrl, createOAuthState, handleGitHubOAuthCallback } from "./oauth";
 import { listUserRepositories, getRepoTree, getFile } from "./github";
+import { indexRepositoryFiles, searchRepository } from "./rag";
+import { CollaborationRoom } from "./collaboration";
+import { verifyMidtransSignature } from "./billing";
 
 const corsHeaders: HeadersInit = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -260,6 +263,102 @@ export default {
       });
     }
 
+    if (path === "/api/repo/index" && request.method === "POST") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      if (!env.VECTOR_INDEX) return json({ error: "Vectorize belum dikonfigurasi." }, 503);
+      const body = (await request.json().catch(() => ({}))) as {
+        owner?: string;
+        repo?: string;
+        branch?: string;
+      };
+      const owner = body.owner || user.githubUsername || env.GITHUB_OWNER;
+      const repo = body.repo;
+      const token = user.githubToken || env.GITHUB_TOKEN;
+      if (!owner || !repo || !token) return json({ error: "Owner, repo, dan koneksi GitHub wajib tersedia." }, 400);
+      const branch = body.branch || await (await import("./github")).getDefaultBranch(token, owner, repo);
+      const paths = await (await import("./github")).listFiles(token, owner, repo, branch);
+      const sourcePaths = paths
+        .filter((path) => !/(^|\/)(node_modules|dist|build|vendor)\//.test(path))
+        .filter((path) => /\.(ts|tsx|js|jsx|py|go|rs|java|php|rb|vue|svelte|md|json|yml|yaml)$/i.test(path))
+        .slice(0, 100);
+      const files = [];
+      for (const path of sourcePaths) {
+        try {
+          const file = await getFile(token, owner, repo, path, branch);
+          files.push({ path, content: file.content });
+        } catch {
+          // Skip files that disappear during indexing; GitHub remains the source of truth.
+        }
+      }
+      try {
+        const result = await indexRepositoryFiles(env, owner, repo, branch, files);
+        return json({ ...result, owner, repo, branch });
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal mengindeks repository." }, 500);
+      }
+    }
+
+    if (path === "/api/repo/search" && request.method === "POST") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      if (!env.VECTOR_INDEX) return json({ error: "Vectorize belum dikonfigurasi." }, 503);
+      const body = (await request.json().catch(() => ({}))) as {
+        owner?: string;
+        repo?: string;
+        branch?: string;
+        query?: string;
+      };
+      const token = user.githubToken || env.GITHUB_TOKEN;
+      const owner = body.owner || user.githubUsername || env.GITHUB_OWNER;
+      if (!token || !owner || !body.repo || !body.query) {
+        return json({ error: "Owner, repo, dan query wajib disertakan." }, 400);
+      }
+      const branch = body.branch || await (await import("./github")).getDefaultBranch(token, owner, body.repo);
+      try {
+        const matches = await searchRepository(env, owner, body.repo, branch, body.query);
+        return json({ matches, owner, repo: body.repo, branch });
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal mencari codebase." }, 500);
+      }
+    }
+
+    if (path.startsWith("/api/collaboration/") && request.method === "GET") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      if (!env.COLLABORATION_ROOM) return json({ error: "Collaboration belum dikonfigurasi." }, 503);
+      const roomName = decodeURIComponent(path.slice("/api/collaboration/".length)).trim();
+      if (!roomName || roomName.length > 120) return json({ error: "Nama room tidak valid." }, 400);
+      const id = env.COLLABORATION_ROOM.idFromName(roomName);
+      return env.COLLABORATION_ROOM.get(id).fetch(request);
+    }
+
+    if (path === "/api/billing/midtrans/webhook" && request.method === "POST") {
+      const body = (await request.json().catch(() => ({}))) as {
+        order_id?: string;
+        status_code?: string;
+        gross_amount?: string;
+        signature_key?: string;
+        transaction_status?: string;
+      };
+      if (!body.order_id || !body.status_code || !body.gross_amount || !body.signature_key) {
+        return json({ error: "Payload Midtrans tidak lengkap." }, 400);
+      }
+      try {
+        const valid = await verifyMidtransSignature(
+          env,
+          body.order_id,
+          body.status_code,
+          body.gross_amount,
+          body.signature_key
+        );
+        if (!valid) return json({ error: "Signature Midtrans tidak valid." }, 401);
+        return json({ accepted: true, transactionStatus: body.transaction_status || "unknown" });
+      } catch (err: any) {
+        return json({ error: err.message || "Webhook billing belum dikonfigurasi." }, 503);
+      }
+    }
+
     if (path === "/api/chat" && request.method === "POST") {
       const user = await getAuthenticatedUser(request, env);
       if (!user) return json({ error: "Unauthorized" }, 401);
@@ -295,3 +394,5 @@ export default {
     return new Response("Not Found", { status: 404, headers: corsHeaders });
   },
 } satisfies ExportedHandler<Env>;
+
+export { CollaborationRoom };
