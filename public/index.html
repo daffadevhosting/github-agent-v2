@@ -2007,9 +2007,26 @@
         const room = `${info.owner}/${info.repo}/${info.branch}`;
         if (collaborationSocket) collaborationSocket.close();
         const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-        collaborationSocket = new WebSocket(`${protocol}//${location.host}/api/collaboration/${encodeURIComponent(room)}`);
+        const token = getToken();
+        if (!token) throw new Error("Sesi login tidak ditemukan. Silakan login ulang.");
+        collaborationSocket = new WebSocket(`${protocol}//${location.host}/api/collaboration/${encodeURIComponent(room)}?token=${encodeURIComponent(token)}`);
         collaborationSocket.onopen = () => addMessage("system", `🤝 Collaboration room aktif: \`${room}\``);
-        collaborationSocket.onerror = () => addMessage("error", "Collaboration belum tersedia atau binding Durable Object belum aktif.");
+        collaborationSocket.onerror = async () => {
+          try {
+            const response = await fetch(`/api/collaboration/${encodeURIComponent(room)}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (response.status === 503) {
+              addMessage("error", "Collaboration belum tersedia di deployment ini. Binding Durable Object belum aktif.");
+            } else if (response.status === 401) {
+              addMessage("error", "Sesi collaboration tidak valid. Silakan login ulang.");
+            } else {
+              addMessage("error", `Collaboration gagal terhubung (HTTP ${response.status}).`);
+            }
+          } catch {
+            addMessage("error", "Collaboration gagal terhubung ke server.");
+          }
+        };
       } catch (err) {
         addMessage("error", err.message);
       }

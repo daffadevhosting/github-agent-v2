@@ -497,13 +497,17 @@ export default {
     }
 
     if (path.startsWith("/api/collaboration/") && request.method === "GET") {
-      const user = await getAuthenticatedUser(request, env);
+      const websocketToken = url.searchParams.get("token");
+      const authRequest = websocketToken
+        ? new Request(request, { headers: new Headers({ ...Object.fromEntries(request.headers), Authorization: `Bearer ${websocketToken}` }) })
+        : request;
+      const user = await getAuthenticatedUser(authRequest, env);
       if (!user) return json({ error: "Unauthorized" }, 401);
       if (!env.COLLABORATION_ROOM) return json({ error: "Collaboration belum dikonfigurasi." }, 503);
       const roomName = decodeURIComponent(path.slice("/api/collaboration/".length)).trim();
       if (!roomName || roomName.length > 120) return json({ error: "Nama room tidak valid." }, 400);
       const id = env.COLLABORATION_ROOM.idFromName(roomName);
-      return env.COLLABORATION_ROOM.get(id).fetch(request);
+      return env.COLLABORATION_ROOM.get(id).fetch(authRequest);
     }
 
     if (path === "/api/billing/midtrans/webhook" && request.method === "POST") {
