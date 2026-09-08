@@ -270,26 +270,6 @@
 
     .auth-footer a { color: var(--accent); text-decoration: none; font-weight: 500; cursor: pointer; }
 
-    /* New: responsive layout for auth actions */
-    .auth-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .auth-actions .auth-social,
-    .auth-actions .auth-email {
-      flex: 1 1 0%;
-    }
-
-    @media (min-width: 900px) {
-      .auth-actions { flex-direction: row; align-items: flex-start; gap: 16px; }
-      .auth-social { display: flex; align-items: center; justify-content: center; padding-right: 8px; }
-      .auth-email { display: flex; flex-direction: column; gap: 8px; }
-      .auth-email .auth-divider { display: none; }
-      .auth-social .btn-github { width: 100%; max-width: 220px; margin-bottom: 0; }
-      .auth-card { max-width: 760px; }
-    }
-
     /* Chat Screen */
     #chat-screen { background: var(--bg); height: 100%; overflow: hidden; }
 
@@ -368,8 +348,707 @@
     }
     .btn-connect-gh:hover { background: rgba(245, 158, 11, 0.25); }
 
-    /* ... rest of styles unchanged ... */
+    .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px 4px 4px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
 
+    .user-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      overflow: hidden;
+    }
+
+    .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    .btn-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .btn-icon:hover { background: var(--bg-hover); color: var(--text); }
+
+    /* App Workspace */
+    .app-workspace {
+      display: flex;
+      flex: 1;
+      height: calc(100% - 55px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--bg-elevated);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      flex-shrink: 0;
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.25s ease;
+      z-index: 30;
+      position: relative;
+    }
+
+    .sidebar.collapsed {
+      margin-left: calc(-1 * var(--sidebar-width));
+    }
+
+    .sidebar-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .sidebar-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sidebar-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sidebar-search { position: relative; }
+    .sidebar-search input {
+      width: 100%;
+      padding: 7px 10px 7px 28px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .sidebar-search input:focus { border-color: var(--accent); }
+    .sidebar-search i {
+      position: absolute;
+      left: 9px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .sidebar-views {
+      flex: 1;
+      overflow-y: auto;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-views::-webkit-scrollbar { width: 4px; }
+    .sidebar-views::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .repo-list {
+      list-style: none;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .repo-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      background: transparent;
+      transition: all 0.15s;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .repo-item:hover {
+      background: var(--bg-hover);
+      border-color: var(--border);
+    }
+
+    .repo-item.selected {
+      background: var(--accent-soft);
+      border-color: var(--accent-border);
+    }
+
+    .repo-item-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .repo-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .repo-badge {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      text-transform: lowercase;
+    }
+
+    .repo-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .repo-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .repo-meta span { display: flex; align-items: center; gap: 4px; }
+    .lang-dot { width: 8px; height: 8px; border-radius: 50%; background: #10a37f; }
+
+    /* Repo Detail Pane */
+    .repo-detail-pane {
+      display: none;
+      flex-direction: column;
+      height: 100%;
+    }
+    .repo-detail-pane.active { display: flex; }
+
+    .repo-detail-header {
+      padding: 12px 14px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn-back-repo {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      transition: color 0.15s;
+    }
+    .btn-back-repo:hover { color: var(--accent); }
+
+    .current-repo-info { display: flex; flex-direction: column; gap: 2px; }
+    .current-repo-info h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .repo-actions-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .btn-repo-action {
+      padding: 6px 8px;
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: all 0.15s;
+    }
+    .btn-repo-action:hover {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-repo-action.full-btn {
+      grid-column: span 2;
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .btn-repo-action.full-btn:hover { background: var(--accent-hover); }
+
+    .file-tree-container { flex: 1; overflow-y: auto; padding: 8px; }
+
+    .tree-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: var(--font);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.1s;
+      user-select: none;
+    }
+    .tree-item:hover { background: var(--bg-hover); color: var(--text); }
+    .tree-item.selected { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+    .tree-item.file { padding-left: 12px; }
+
+    .file-icon {
+      width: 14px;
+      height: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .chat-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-width: 0;
+      position: relative;
+      background: var(--bg);
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      scroll-behavior: smooth;
+    }
+
+    #messages::-webkit-scrollbar { width: 6px; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .msg-row {
+      display: flex;
+      gap: 12px;
+      max-width: 820px;
+      width: 100%;
+      margin: 0 auto;
+      animation: fadeUp 0.2s ease;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg-row.user { flex-direction: row-reverse; }
+
+    .msg-avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    .msg-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .msg-row.assistant .msg-avatar { background: linear-gradient(135deg, var(--accent), #0d8c6d); }
+    .msg-row.error .msg-avatar { background: var(--error); }
+    .msg-row.system .msg-avatar { background: #38bdf8; }
+    .msg-row.user .msg-avatar {
+      background: var(--user-bubble);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .msg-body { flex: 1; min-width: 0; }
+    .msg-role { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+    .msg-row.user .msg-role { text-align: right; }
+
+    .msg-content {
+      font-size: 14.5px;
+      line-height: 1.65;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .msg-row.user .msg-content {
+      background: var(--bg-none);
+      padding: 10px 14px;
+      border-radius: 14px 14px 4px 14px;
+      display: inline-block;
+      max-width: 100%;
+      float: right;
+      white-space: pre-wrap;
+    }
+
+    .msg-row.assistant .msg-content { padding: 2px 0; }
+    .msg-row.error .msg-content {
+      background: var(--error-bg);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: var(--error);
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+    }
+    .msg-row.system .msg-content {
+      background: var(--info-bg);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      color: var(--info-text);
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+    }
+
+    .msg-content p { margin-bottom: 10px; }
+    .msg-content p:last-child { margin-bottom: 0; }
+    .msg-content h1, .msg-content h2, .msg-content h3, .msg-content h4 { margin: 14px 0 8px; color: #fff; }
+    .msg-content ul, .msg-content ol { margin-left: 20px; margin-bottom: 10px; }
+    .msg-content li { margin-bottom: 4px; }
+    .msg-content a { color: var(--accent); text-decoration: underline; }
+
+    .msg-content code:not(pre code) {
+      font-family: var(--font-code);
+      background: var(--bg-hover);
+      color: #38bdf8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .code-container {
+      position: relative;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin: 12px 0;
+      overflow: hidden;
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px;
+      background: #1a1a1a;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+
+    .copy-btn:hover { background: var(--bg-hover); color: var(--text); }
+
+    .msg-content pre { margin: 0; padding: 12px 14px; overflow-x: auto; }
+    .msg-content pre code {
+      font-family: var(--font-code);
+      font-size: 13px;
+      line-height: 1.5;
+      color: #e2e8f0;
+      background: transparent;
+      padding: 0;
+    }
+
+    .thinking-row {
+      display: flex;
+      gap: 12px;
+      max-width: 820px;
+      width: 100%;
+      margin: 0 auto;
+      align-items: center;
+    }
+
+    .thinking-dots { display: flex; gap: 5px; padding: 8px 0; }
+    .thinking-dots span {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: bounce 1.2s ease-in-out infinite;
+    }
+    .thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .thinking-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+      40% { transform: translateY(-5px); opacity: 1; }
+    }
+
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 40px 24px;
+      text-align: center;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    .empty-state .hero-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, var(--accent), #0d8c6d);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      margin-bottom: 8px;
+      box-shadow: 0 12px 32px rgba(16, 163, 127, 0.3);
+    }
+
+    .empty-state h2 { font-size: 20px; font-weight: 600; }
+    .empty-state p { font-size: 13.5px; color: var(--text-secondary); line-height: 1.5; }
+
+    .suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 16px;
+    }
+
+    .suggestion {
+      padding: 8px 14px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .suggestion:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .context-banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 820px;
+      width: 100%;
+      margin: 0 auto 8px;
+      padding: 6px 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      animation: fadeUp 0.15s ease;
+    }
+    .context-banner.show { display: flex; }
+
+    .context-badge-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .context-badge-tag {
+      background: var(--accent-soft);
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-clear-context {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      padding: 2px;
+      border-radius: 4px;
+      transition: color 0.15s;
+    }
+    .btn-clear-context:hover { color: var(--error); }
+
+    .input-area {
+      padding: 10px 16px 16px;
+      background: linear-gradient(to top, var(--bg) 75%, transparent);
+      flex-shrink: 0;
+    }
+
+    .input-shell {
+      max-width: 820px;
+      margin: 0 auto;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      padding: 10px 10px 10px 16px;
+      transition: all 0.15s;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+    }
+
+    .input-shell:focus-within {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.12);
+    }
+
+    #input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14.5px;
+      line-height: 1.5;
+      resize: none;
+      max-height: 160px;
+      min-height: 24px;
+      padding: 4px 0;
+    }
+
+    #send {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+
+    #send:hover:not(:disabled) { background: var(--accent-hover); }
+    #send:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      background: var(--border);
+    }
+
+    .input-hint {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    .sidebar-overlay {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(2px);
+      z-index: 25;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        transform: translateX(-100%);
+        margin-left: 0 !important;
+        box-shadow: var(--shadow);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar-overlay.open { display: block; }
+    }
     .hidden {
       display: none;
       visibility: hidden;
@@ -391,194 +1070,991 @@
           <p>Automate repos, code reviews, debugging &amp; contextual AI editing</p>
         </div>
 
-        <div class="auth-actions">
-          <div class="auth-social">
-            <a href="/auth/github" class="btn-github">
-              <i class="fa-brands fa-github fa-lg"></i>
-              <span>Masuk dengan GitHub</span>
-            </a>
-          </div>
+        <a href="/auth/github" class="btn-github">
+          <i class="fa-brands fa-github fa-lg"></i>
+          <span>Masuk dengan GitHub</span>
+        </a>
+      <div class="">
+        <div class="auth-divider">atau dengan email</div>
 
-          <div class="auth-email">
-            <div class="auth-divider">atau dengan email</div>
-
-            <div class="auth-tabs">
-              <button class="auth-tab active" data-tab="login" type="button">
-                <i data-lucide="log-in" style="width: 14px; height: 14px;"></i> Login
-              </button>
-              <button class="auth-tab" data-tab="register" type="button">
-                <i data-lucide="user-plus" style="width: 14px; height: 14px;"></i> Register
-              </button>
-            </div>
-
-            <div class="auth-error" id="auth-error">
-              <i data-lucide="alert-circle" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
-              <span id="auth-error-text"></span>
-            </div>
-
-            <form id="login-form" autocomplete="on">
-              <div class="form-group">
-                <label for="login-email">Email</label>
-                <input id="login-email" name="email" type="email" placeholder="email@contoh.com" autocomplete="email" />
-              </div>
-
-              <div class="form-group">
-                <label for="login-password">Password</label>
-                <input id="login-password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" />
-              </div>
-
-              <button class="btn-primary" type="submit">Masuk dengan Email</button>
-            </form>
-
-            <form id="register-form" style="display:none;">
-              <div class="form-group">
-                <label for="reg-email">Email</label>
-                <input id="reg-email" name="email" type="email" placeholder="email@contoh.com" />
-              </div>
-              <div class="form-group">
-                <label for="reg-password">Password</label>
-                <input id="reg-password" name="password" type="password" placeholder="••••••••" />
-              </div>
-              <button class="btn-primary" type="submit">Daftar</button>
-            </form>
-
-          </div>
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-tab="login" type="button">
+            <i data-lucide="log-in" style="width: 14px; height: 14px;"></i> Login
+          </button>
+          <button class="auth-tab" data-tab="register" type="button">
+            <i data-lucide="user-plus" style="width: 14px; height: 14px;"></i> Register
+          </button>
         </div>
+
+        <div class="auth-error" id="auth-error">
+          <i data-lucide="alert-circle" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
+          <span id="auth-error-text"></span>
+        </div>
+
+        <form id="login-form" autocomplete="on">
+          <div class="form-group">
+            <label for="login-email">
+              <i data-lucide="mail" style="width: 14px; height: 14px;"></i> Email
+            </label>
+            <input id="login-email" type="email" placeholder="you@company.com" required autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label for="login-password">
+              <i data-lucide="lock" style="width: 14px; height: 14px;"></i> Password
+            </label>
+            <input id="login-password" type="password" placeholder="••••••••" required minlength="6" autocomplete="current-password" />
+          </div>
+          <button class="btn-primary" type="submit" id="login-btn">
+            <i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i> Masuk
+          </button>
+        </form>
+
+        <form id="register-form" style="display:none" autocomplete="on">
+          <div class="form-group">
+            <label for="reg-name">
+              <i data-lucide="user" style="width: 14px; height: 14px;"></i> Nama
+            </label>
+            <input id="reg-name" type="text" placeholder="Nama kamu" autocomplete="name" />
+          </div>
+          <div class="form-group">
+            <label for="reg-email">
+              <i data-lucide="mail" style="width: 14px; height: 14px;"></i> Email
+            </label>
+            <input id="reg-email" type="email" placeholder="you@company.com" required autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label for="reg-password">
+              <i data-lucide="lock" style="width: 14px; height: 14px;"></i> Password
+            </label>
+            <input id="reg-password" type="password" placeholder="Minimal 6 karakter" required minlength="6" autocomplete="new-password" />
+          </div>
+          <button class="btn-primary" type="submit" id="reg-btn">
+            <i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Buat akun
+          </button>
+        </form>
 
         <div class="auth-footer">
-          <p>Dengan masuk, Anda setuju dengan syarat &amp; ketentuan kami.</p>
+          <span id="auth-switch-text">Belum punya akun?</span>
+          <a id="auth-switch-link">Daftar</a>
         </div>
+      </div>
       </div>
     </div>
   </div>
 
+  <!-- CHAT & REPO WORKSPACE SCREEN -->
   <div id="chat-screen" class="screen">
-    <div style="display:flex;flex-direction:column;height:100%;background:#0d0d0d;color:#ececec;">
-      <header style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #2a2a2a;background:#111;">
-        <div style="display:flex;align-items:center;gap:12px;min-width:0;">
-          <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#10a37f,#0d8c6d);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">G</div>
-          <div style="min-width:0;">
-            <div style="font-size:14px;font-weight:600;">GitHub Agent</div>
-            <div id="session-status" style="font-size:11px;color:#a0a0a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Session aktif</div>
+    <header class="chat-header">
+      <div class="header-left">
+        <button class="btn-icon" id="sidebar-toggle-btn" title="Toggle Repositori Sidebar" type="button">
+          <i data-lucide="panel-left" style="width: 18px; height: 18px;"></i>
+        </button>
+        <div class="logo-sm">
+          <i class="fa-brands fa-github"></i>
+        </div>
+        <div class="title-block">
+          <h1>GitHub Agent</h1>
+          <div class="subtitle" id="ctx-meta">
+            <i data-lucide="git-branch" style="width: 12px; height: 12px;"></i>
+            <span id="ctx-meta-text">Pilih repo di sidebar untuk konteks AI</span>
           </div>
         </div>
-
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button type="button" style="padding:7px 12px;border:1px solid #2a2a2a;border-radius:999px;background:rgba(245,158,11,.12);color:#fbbf24;font-weight:600;cursor:pointer;">Hubungkan GitHub</button>
-          <button id="logout-button" type="button" style="padding:8px 12px;border:1px solid #2a2a2a;border-radius:999px;background:transparent;color:#ececec;cursor:pointer;">Keluar</button>
-        </div>
-      </header>
-
-      <div style="display:flex;flex:1;min-height:0;">
-        <aside style="width:260px;border-right:1px solid #2a2a2a;background:#111;padding:16px 12px;display:flex;flex-direction:column;gap:12px;">
-          <div style="padding:10px 12px;border-radius:12px;background:#1a1a1a;border:1px solid #2a2a2a;">
-            <div style="font-size:11px;color:#a0a0a0;text-transform:uppercase;letter-spacing:.08em;">Akun</div>
-            <div id="user-github" style="font-size:15px;font-weight:600;margin-top:6px;">terhubung</div>
-          </div>
-
-          <div style="padding:10px 12px;border-radius:12px;background:rgba(16,163,127,.08);border:1px solid rgba(16,163,127,.2);color:#d4f7ed;">
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#93e6d1;">Status</div>
-            <div style="margin-top:6px;font-weight:600;">Agent siap</div>
-          </div>
-        </aside>
-
-        <main style="flex:1;display:flex;flex-direction:column;min-width:0;">
-          <div style="padding:18px 20px;border-bottom:1px solid #2a2a2a;background:#0f0f0f;display:flex;align-items:center;justify-content:space-between;gap:12px;">
-            <div>
-              <div style="font-size:11px;color:#a0a0a0;text-transform:uppercase;letter-spacing:.08em;">Chat</div>
-              <div id="welcome-title" style="font-size:20px;font-weight:600;margin-top:4px;">Halo!</div>
-            </div>
-          </div>
-
-          <div style="flex:1;padding:18px 20px;display:flex;flex-direction:column;gap:16px;overflow:auto;background:#0d0d0d;">
-            <div style="max-width:70%;padding:12px 14px;border-radius:14px;background:#1a1a1a;border:1px solid #2a2a2a;color:#e5e5e5;align-self:flex-start;">
-              Hai! Saya GitHub Agent. Kamu bisa minta saya buat repo, baca file, atau review kode.
-            </div>
-            <div style="max-width:70%;padding:12px 14px;border-radius:14px;background:rgba(16,163,127,.12);border:1px solid rgba(16,163,127,.25);color:#d8f9f0;align-self:flex-end;">
-              Bikin repo baru untuk project landing page.
-            </div>
-            <div style="max-width:70%;padding:12px 14px;border-radius:14px;background:#1a1a1a;border:1px solid #2a2a2a;color:#e5e5e5;align-self:flex-start;">
-              Siap. Saya bisa buat struktur project, branch, file, dan PR untuk GitHub kamu.
-            </div>
-          </div>
-
-          <div style="padding:14px 18px 18px;border-top:1px solid #2a2a2a;background:#0f0f0f;">
-            <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;border:1px solid #2a2a2a;background:#1a1a1a;">
-              <input type="text" placeholder="Ketik instruksi untuk agen..." style="flex:1;background:transparent;border:none;outline:none;color:#ececec;font-size:14px;" />
-              <button type="button" style="padding:10px 14px;border:none;border-radius:10px;background:#10a37f;color:white;font-weight:600;cursor:pointer;">Kirim</button>
-            </div>
-          </div>
-        </main>
       </div>
+
+      <div class="header-actions">
+        <a href="/auth/github" class="btn-connect-gh" id="connect-gh-btn" style="display:none;">
+          <i class="fa-brands fa-github"></i> Hubungkan GitHub
+        </a>
+        <div class="user-chip" id="user-chip">
+          <div class="user-avatar" id="user-avatar">U</div>
+          <span class="chip-email" id="user-label">User</span>
+        </div>
+        <button class="btn-icon" id="logout-btn" title="Logout" type="button">
+          <i data-lucide="log-out" style="width: 16px; height: 16px;"></i>
+        </button>
+      </div>
+    </header>
+
+    <div class="app-workspace">
+      <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+      <!-- SIDEBAR REPO & EXPLORER -->
+      <aside class="sidebar" id="sidebar">
+        <!-- View 1: Repositories List -->
+        <div id="sidebar-repos-view" class="sidebar-views" style="display:flex;">
+          <div class="sidebar-header">
+            <div class="sidebar-title-row">
+              <div class="sidebar-title">
+                <i data-lucide="folder-git-2" style="width: 16px; height: 16px; color: var(--accent);"></i>
+                <span>Daftar Repositori</span>
+              </div>
+              <button class="btn-icon" id="refresh-repos-btn" title="Refresh Daftar Repo" style="width:26px; height:26px;">
+                <i data-lucide="refresh-cw" style="width: 13px; height: 13px;"></i>
+              </button>
+            </div>
+            <div class="sidebar-search">
+              <i data-lucide="search" style="width: 13px;height: 13px;position: absolute;top: 9px;left: 10px;"></i>
+              <input type="text" id="repo-search-input" placeholder="Cari repositori..." autocomplete="off" />
+            </div>
+          </div>
+
+          <div style="flex:1; overflow-y:auto;">
+            <ul class="repo-list" id="repo-list-container">
+              <!-- Dynamically rendered repo list -->
+            </ul>
+          </div>
+        </div>
+
+        <!-- View 2: Repo Content & File Explorer -->
+        <div id="sidebar-files-view" class="repo-detail-pane">
+          <div class="repo-detail-header">
+            <button class="btn-back-repo" id="btn-back-to-repos" type="button">
+              <i data-lucide="chevron-left" style="width: 14px; height: 14px;"></i> Semua Repo
+            </button>
+            <div class="current-repo-info">
+              <h3 id="active-repo-name">owner/repo</h3>
+              <div class="subtitle" style="font-size:11px;">
+                <i data-lucide="git-branch" style="width:11px; height:11px;"></i>
+                <span id="active-repo-branch">main</span>
+              </div>
+            </div>
+
+            <div class="repo-actions-bar">
+              <button class="btn-repo-action full-btn" id="btn-inject-full-repo" type="button">
+                <i data-lucide="sparkles" style="width: 13px; height: 13px;"></i> Buka Repo di Chat (Konteks)
+              </button>
+              <button class="btn-repo-action" id="btn-quick-review" type="button">
+                <i data-lucide="shield-alert" style="width: 12px; height: 12px;"></i> Review Code
+              </button>
+              <button class="btn-repo-action" id="btn-quick-refactor" type="button">
+                <i data-lucide="wrench" style="width: 12px; height: 12px;"></i> Fix &amp; Refactor
+              </button>
+            </div>
+          </div>
+
+          <div class="sidebar-header" style="padding:8px 14px; background:var(--bg-elevated);">
+            <span style="font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em;">Struktur File</span>
+          </div>
+
+          <div class="file-tree-container" id="file-tree-container">
+            <!-- Dynamically populated file tree -->
+          </div>
+        </div>
+      </aside>
+
+      <!-- CHAT CONVERSATION AREA -->
+      <main class="chat-main">
+        <div id="messages">
+          <div class="empty-state" id="empty-state">
+            <div class="hero-icon">
+              <i class="fa-brands fa-github fa-2x"></i>
+            </div>
+            <h2>GitHub AI Agent &amp; Context Assistant</h2>
+            <p>Pilih repositori dari sidebar kiri atau klik file untuk memuatnya ke dalam sesi obrolan sebagai konteks.</p>
+            <div class="suggestions">
+              <button class="suggestion" type="button" data-prompt="help">
+                <i data-lucide="help-circle" style="width: 14px; height: 14px;"></i> Lihat perintah bot
+              </button>
+              <button class="suggestion" type="button" data-prompt="buat repo baru bernama express-auth-api">
+                <i data-lucide="folder-plus" style="width: 14px; height: 14px;"></i> Buat repo baru
+              </button>
+              <button class="suggestion" type="button" data-prompt="buatkan boilerplate backend Node.js + Express + Prisma">
+                <i data-lucide="code" style="width: 14px; height: 14px;"></i> Boilerplate Express
+              </button>
+              <button class="suggestion" type="button" id="btn-open-sidebar-suggest">
+                <i data-lucide="folder-search" style="width: 14px; height: 14px;"></i> Buka Sidebar Repo
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="input-area">
+          <div class="context-banner" id="context-banner">
+            <div class="context-badge-info">
+              <span class="context-badge-tag" id="context-badge-tag">
+                <i data-lucide="paperclip" style="width:12px; height:12px;"></i> Konteks Aktif
+              </span>
+              <span id="context-banner-text" style="font-weight:500;">repo-name</span>
+            </div>
+            <button class="btn-clear-context" id="btn-clear-context" title="Hapus Konteks" type="button">
+              <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+            </button>
+          </div>
+
+          <div class="input-shell">
+            <textarea id="input" rows="1" placeholder="Tulis instruksi perbaikan atau tanya apa saja tentang repo ini…" autocomplete="off"></textarea>
+            <button id="send" type="button" disabled title="Tulis pesan terlebih dahulu">
+              <i data-lucide="send" style="width: 16px; height: 16px;"></i>
+            </button>
+          </div>
+          <div class="input-hint">Enter untuk kirim · Shift+Enter baris baru · Klik file di sidebar untuk auto-inject</div>
+        </div>
+      </main>
     </div>
   </div>
 
-  <script type="module">
-    import { bootstrapAuthSession, readStoredAuth, clearAuth } from './auth-session.js';
+  <script>
+    const TOKEN_KEY = "ga_token";
+    const USER_KEY = "ga_user";
 
-    function showAuthenticatedView(auth) {
-      const authScreen = document.getElementById('auth-screen');
-      const chatScreen = document.getElementById('chat-screen');
-      const welcomeTitle = document.getElementById('welcome-title');
-      const userGitHub = document.getElementById('user-github');
-      const sessionStatus = document.getElementById('session-status');
-
-      if (welcomeTitle) {
-        const userName = auth?.user?.name || auth?.user?.email || 'Pengguna';
-        welcomeTitle.textContent = `Halo, ${userName}!`;
-      }
-
-      if (userGitHub) {
-        userGitHub.textContent = auth?.user?.githubUsername || auth?.user?.email || 'terhubung';
-      }
-
-      if (sessionStatus) {
-        sessionStatus.textContent = 'Session aktif';
-      }
-
-      if (authScreen) authScreen.classList.remove('active');
-      if (chatScreen) chatScreen.classList.add('active');
+    if (window.marked) {
+      marked.setOptions({ gfm: true, breaks: true });
     }
 
-    function showLoginView() {
-      const authScreen = document.getElementById('auth-screen');
-      const chatScreen = document.getElementById('chat-screen');
-      if (authScreen) authScreen.classList.add('active');
-      if (chatScreen) chatScreen.classList.remove('active');
+    function renderIcons() {
+      if (window.lucide) window.lucide.createIcons();
     }
 
-    const auth = bootstrapAuthSession();
-    const savedAuth = readStoredAuth();
-    const activeAuth = auth || savedAuth;
+    // DOM Elements
+    const authScreen = document.getElementById("auth-screen");
+    const chatScreen = document.getElementById("chat-screen");
+    const loginForm = document.getElementById("login-form");
+    const registerForm = document.getElementById("register-form");
+    const authError = document.getElementById("auth-error");
+    const authErrorText = document.getElementById("auth-error-text");
+    const messagesEl = document.getElementById("messages");
+    const emptyState = document.getElementById("empty-state");
+    const inputEl = document.getElementById("input");
+    const sendBtn = document.getElementById("send");
+    const ctxMetaText = document.getElementById("ctx-meta-text");
+    const userAvatar = document.getElementById("user-avatar");
+    const userLabel = document.getElementById("user-label");
+    const connectGhBtn = document.getElementById("connect-gh-btn");
+    const logoutBtn = document.getElementById("logout-btn");
 
-    if (activeAuth && activeAuth.user) {
-      window.__GITHUB_AGENT_AUTH__ = activeAuth;
-      showAuthenticatedView(activeAuth);
-    } else {
-      showLoginView();
+    // Sidebar & Explorer Elements
+    const sidebar = document.getElementById("sidebar");
+    const sidebarOverlay = document.getElementById("sidebar-overlay");
+    const sidebarToggleBtn = document.getElementById("sidebar-toggle-btn");
+    const sidebarReposView = document.getElementById("sidebar-repos-view");
+    const sidebarFilesView = document.getElementById("sidebar-files-view");
+    const repoListContainer = document.getElementById("repo-list-container");
+    const repoSearchInput = document.getElementById("repo-search-input");
+    const refreshReposBtn = document.getElementById("refresh-repos-btn");
+    const btnBackToRepos = document.getElementById("btn-back-to-repos");
+    const activeRepoName = document.getElementById("active-repo-name");
+    const activeRepoBranch = document.getElementById("active-repo-branch");
+    const fileTreeContainer = document.getElementById("file-tree-container");
+    const btnInjectFullRepo = document.getElementById("btn-inject-full-repo");
+    const btnQuickReview = document.getElementById("btn-quick-review");
+    const btnQuickRefactor = document.getElementById("btn-quick-refactor");
+    const contextBanner = document.getElementById("context-banner");
+    const contextBannerText = document.getElementById("context-banner-text");
+    const btnClearContext = document.getElementById("btn-clear-context");
+    const btnOpenSidebarSuggest = document.getElementById("btn-open-sidebar-suggest");
+
+    let isBusy = false;
+    let hasMessages = false;
+    let currentUser = null;
+    let userRepos = [];
+    let selectedRepo = null;
+    let selectedBranch = null;
+    let activeContext = null;
+
+
+    function getRepoBranch(repo) {
+      if (!repo) return "main";
+      return repo.default_branch || repo.branch || "main";
     }
 
-    document.addEventListener('click', function(e){
-      if (e.target.closest('.auth-tab')){
-        var btn = e.target.closest('.auth-tab');
-        var tab = btn.getAttribute('data-tab');
-        document.querySelectorAll('.auth-tab').forEach(function(b){ b.classList.remove('active'); });
-        btn.classList.add('active');
-        if (tab === 'login'){
-          document.getElementById('login-form').style.display = '';
-          document.getElementById('register-form').style.display = 'none';
+    function getToken() { return localStorage.getItem(TOKEN_KEY); }
+    function getStoredUser() {
+      try { return JSON.parse(localStorage.getItem(USER_KEY) || "null"); } catch { return null; }
+    }
+    function setSession(token, user) {
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+      currentUser = user;
+    }
+    function clearSession() {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      currentUser = null;
+      selectedRepo = null;
+      selectedBranch = null;
+      activeContext = null;
+    }
+
+    function showAuthError(msg) {
+      authErrorText.textContent = msg;
+      authError.classList.add("show");
+      renderIcons();
+    }
+
+    function hideAuthError() {
+      authError.classList.remove("show");
+      authErrorText.textContent = "";
+    }
+
+    function showScreen(name) {
+      if (name === "auth") {
+        authScreen.classList.add("active");
+        chatScreen.classList.remove("active");
+      } else {
+        authScreen.classList.remove("active");
+        chatScreen.classList.add("active");
+      }
+      renderIcons();
+    }
+
+    function applyUserUI(user) {
+      currentUser = user;
+      if (user.avatarUrl) {
+        userAvatar.innerHTML = `<img src="${user.avatarUrl}" alt="${user.name || 'User'}">`;
+      } else {
+        const initial = (user.name || user.email || "U").charAt(0).toUpperCase();
+        userAvatar.textContent = initial;
+      }
+      userLabel.textContent = user.githubUsername ? `@${user.githubUsername}` : (user.name || user.email);
+
+      if (user.hasGitHub || user.githubUsername) {
+        connectGhBtn.style.display = "none";
+      } else {
+        connectGhBtn.style.display = "flex";
+      }
+    }
+
+    document.querySelectorAll(".auth-tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".auth-tab").forEach((t) => t.classList.remove("active"));
+        tab.classList.add("active");
+        const isLogin = tab.dataset.tab === "login";
+        loginForm.style.display = isLogin ? "block" : "none";
+        registerForm.style.display = isLogin ? "none" : "block";
+        hideAuthError();
+        document.getElementById("auth-switch-text").textContent = isLogin ? "Belum punya akun?" : "Sudah punya akun?";
+        document.getElementById("auth-switch-link").textContent = isLogin ? "Daftar" : "Login";
+        renderIcons();
+      });
+    });
+
+    document.getElementById("auth-switch-link").addEventListener("click", (e) => {
+      e.preventDefault();
+      const loginActive = loginForm.style.display !== "none";
+      document.querySelector(`.auth-tab[data-tab="${loginActive ? "register" : "login"}"]`).click();
+    });
+
+    async function apiRequest(path, method = "GET", body = null) {
+      const token = getToken();
+      const headers = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(path, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || data.message || "Request gagal");
+      return data;
+    }
+
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      hideAuthError();
+      const btn = document.getElementById("login-btn");
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Masuk…`;
+      try {
+        const data = await apiRequest("/auth/login", "POST", {
+          email: document.getElementById("login-email").value,
+          password: document.getElementById("login-password").value,
+        });
+        setSession(data.token, data.user);
+        enterChat(data.user);
+      } catch (err) {
+        showAuthError(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="arrow-right" style="width: 16px; height: 16px;"></i> Masuk`;
+        renderIcons();
+      }
+    });
+
+    registerForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      hideAuthError();
+      const btn = document.getElementById("reg-btn");
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Membuat akun…`;
+      try {
+        const data = await apiRequest("/auth/register", "POST", {
+          name: document.getElementById("reg-name").value,
+          email: document.getElementById("reg-email").value,
+          password: document.getElementById("reg-password").value,
+        });
+        setSession(data.token, data.user);
+        enterChat(data.user);
+      } catch (err) {
+        showAuthError(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="user-plus" style="width: 16px; height: 16px;"></i> Buat akun`;
+        renderIcons();
+      }
+    });
+
+    logoutBtn.addEventListener("click", () => {
+      clearSession();
+      messagesEl.innerHTML = "";
+      messagesEl.appendChild(emptyState);
+      hasMessages = false;
+      emptyState.style.display = "";
+      updateContextBanner();
+      showScreen("auth");
+      document.querySelector('.auth-tab[data-tab="login"]').click();
+    });
+
+    async function enterChat(user) {
+      applyUserUI(user);
+      showScreen("chat");
+      inputEl.focus();
+      renderIcons();
+      await fetchRepos();
+    }
+
+    function toggleSidebar() {
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        sidebar.classList.toggle("open");
+        sidebarOverlay.classList.toggle("open");
+      } else {
+        sidebar.classList.toggle("collapsed");
+      }
+    }
+
+    sidebarToggleBtn.addEventListener("click", toggleSidebar);
+    sidebarOverlay.addEventListener("click", () => {
+      sidebar.classList.remove("open");
+      sidebarOverlay.classList.remove("open");
+    });
+
+    if (btnOpenSidebarSuggest) {
+      btnOpenSidebarSuggest.addEventListener("click", () => {
+        if (sidebar.classList.contains("collapsed")) sidebar.classList.remove("collapsed");
+        if (window.innerWidth <= 768) {
+          sidebar.classList.add("open");
+          sidebarOverlay.classList.add("open");
+        }
+      });
+    }
+
+    /* Ambil Repositori Realtime Milik Pengguna dari Backend */
+    async function fetchRepos() {
+      repoListContainer.innerHTML = `
+        <li style="padding:16px; text-align:center; color:var(--text-muted); font-size:12px;">
+          <i class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i> Memuat repositori GitHub kamu...
+        </li>
+      `;
+      try {
+        const res = await apiRequest("/api/repos");
+        userRepos = res.repos || [];
+        renderRepoList(userRepos);
+      } catch (err) {
+        repoListContainer.innerHTML = `
+          <li style="padding:16px; text-align:center; color:var(--error); font-size:12px;">
+            <i data-lucide="alert-triangle" style="width:16px; height:16px; margin:0 auto 4px; display:block;"></i>
+            ${err.message || 'Gagal memuat repositori'}
+          </li>
+        `;
+        renderIcons();
+      }
+    }
+
+    function renderRepoList(repos) {
+      repoListContainer.innerHTML = "";
+      if (!repos || repos.length === 0) {
+        repoListContainer.innerHTML = `
+          <li style="padding:24px 16px; text-align:center; color:var(--text-muted); font-size:12px;">
+            <i data-lucide="inbox" style="width:24px; height:24px; margin:0 auto 6px; display:block; opacity:0.5;"></i>
+            Belum ada repositori. Buat repo baru lewat chat!
+          </li>
+        `;
+        renderIcons();
+        return;
+      }
+
+      repos.forEach((repo) => {
+        const li = document.createElement("li");
+        li.className = `repo-item ${selectedRepo?.name === repo.name ? 'selected' : ''}`;
+        li.innerHTML = `
+          <div class="repo-item-head">
+            <span class="repo-name" title="${repo.full_name || repo.name}">
+              <i data-lucide="book-marked" style="width:14px; height:14px; color:var(--accent); flex-shrink:0;"></i>
+              ${repo.name}
+            </span>
+            <span class="repo-badge">${repo.private ? 'private' : 'public'}</span>
+          </div>
+          <p class="repo-desc">${repo.description || "Tidak ada deskripsi."}</p>
+          <div class="repo-meta">
+            <span>
+              <span class="lang-dot"></span>
+              ${repo.language || "Code"}
+            </span>
+            <span>
+              <i data-lucide="star" style="width:11px; height:11px;"></i>
+              ${repo.stars || 0}
+            </span>
+            <span>
+              <i data-lucide="git-branch" style="width:11px; height:11px;"></i>
+              ${getRepoBranch(repo)}
+            </span>
+          </div>
+        `;
+
+        li.addEventListener("click", () => openRepoExplorer(repo));
+        repoListContainer.appendChild(li);
+      });
+
+      renderIcons();
+    }
+
+    repoSearchInput.addEventListener("input", (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      const filtered = userRepos.filter(r => 
+        r.name.toLowerCase().includes(q) || 
+        (r.description && r.description.toLowerCase().includes(q))
+      );
+      renderRepoList(filtered);
+    });
+
+    refreshReposBtn.addEventListener("click", () => {
+      fetchRepos();
+    });
+
+    /* Buka File Explorer Repositori Asli + tampilkan ringkasan di area percakapan */
+    async function openRepoExplorer(repo) {
+      selectedRepo = repo;
+      selectedBranch = getRepoBranch(repo);
+      activeRepoName.textContent = repo.full_name || repo.name;
+      activeRepoBranch.textContent = selectedBranch;
+
+      // Set konteks aktif (repo + branch dinamis) agar AI/edit memakai branch yang benar
+      setContext({
+        type: "repo",
+        repoName: repo.name,
+        branch: selectedBranch,
+        fullName: repo.full_name || repo.name
+      });
+
+      sidebarReposView.style.display = "none";
+      sidebarFilesView.classList.add("active");
+
+      fileTreeContainer.innerHTML = `
+        <div style="padding:16px; text-align:center; color:var(--text-muted); font-size:12px;">
+          <i class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i> Mengambil struktur file...
+        </div>
+      `;
+      renderIcons();
+
+      try {
+        const owner = repo.owner || repo.full_name?.split('/')[0] || currentUser?.githubUsername;
+        const res = await apiRequest(`/api/repos/${owner}/${repo.name}/tree?branch=${encodeURIComponent(selectedBranch)}`);
+        repo.files = res.files || [];
+        renderFileTree(repo.files);
+
+        // Tampilkan isi repo di layout percakapan
+        showRepoContentsInChat(repo, selectedBranch, repo.files);
+      } catch (err) {
+        fileTreeContainer.innerHTML = `<div style="padding:16px; text-align:center; color:var(--error); font-size:12px;">Gagal memuat berkas: ${err.message}</div>`;
+        addMessage("error", `Gagal memuat struktur repo **${repo.name}**: ${err.message}`);
+      }
+    }
+
+    function showRepoContentsInChat(repo, branch, files) {
+      const fullName = repo.full_name || repo.name;
+      const maxShow = 40;
+      const list = (files || []).slice(0, maxShow);
+      const lines = [];
+      lines.push(`📂 **Repo aktif:** \`${fullName}\``);
+      lines.push(`🌿 **Branch:** \`${branch}\``);
+      lines.push("");
+      if (!list.length) {
+        lines.push("_Repositori ini masih kosong._");
+      } else {
+        const total = files.length;
+        const label = total > maxShow
+          ? `**Struktur file** (${total} file, menampilkan ${maxShow} pertama):`
+          : `**Struktur file** (${total} file):`;
+        lines.push(label);
+        lines.push("");
+        for (const f of list) {
+          lines.push(`- \`${f.path}\``);
+        }
+        lines.push("");
+        if (total > maxShow) {
+          lines.push(`_…dan ${total - maxShow} file lainnya. Klik file di sidebar untuk memuat isinya ke chat._`);
         } else {
-          document.getElementById('login-form').style.display = 'none';
-          document.getElementById('register-form').style.display = '';
+          lines.push("_Klik file di sidebar untuk memuat isinya ke chat._");
+        }
+      }
+      addMessage("system", lines.join("\n"));
+      ctxMetaText.textContent = `${fullName} @ ${branch}`;
+      renderIcons();
+    }
+
+    btnBackToRepos.addEventListener("click", () => {
+      sidebarFilesView.classList.remove("active");
+      sidebarReposView.style.display = "flex";
+      renderIcons();
+    });
+
+    function getFileIcon(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      if (['js', 'jsx'].includes(ext)) return '<i class="fa-brands fa-js" style="color:#f7df1e;"></i>';
+      if (['ts', 'tsx'].includes(ext)) return '<i class="fa-solid fa-code" style="color:#3178c6;"></i>';
+      if (['py'].includes(ext)) return '<i class="fa-brands fa-python" style="color:#3572A5;"></i>';
+      if (['json'].includes(ext)) return '<i class="fa-solid fa-brackets-curly" style="color:#cbcb41;"></i>';
+      if (['md'].includes(ext)) return '<i class="fa-solid fa-file-lines" style="color:#519aba;"></i>';
+      if (['css', 'scss'].includes(ext)) return '<i class="fa-brands fa-css3-alt" style="color:#42a5f5;"></i>';
+      if (['html'].includes(ext)) return '<i class="fa-brands fa-html5" style="color:#e34c26;"></i>';
+      return '<i data-lucide="file-code" style="width:13px; height:13px; color:var(--text-secondary);"></i>';
+    }
+
+    function renderFileTree(files) {
+      fileTreeContainer.innerHTML = "";
+
+      if (!files || files.length === 0) {
+        fileTreeContainer.innerHTML = `<div style="padding:16px; text-align:center; color:var(--text-muted); font-size:12px;">Repositori ini kosong.</div>`;
+        return;
+      }
+
+      files.forEach((file) => {
+        const item = document.createElement("div");
+        item.className = "tree-item file";
+        item.innerHTML = `
+          <div class="file-icon">${getFileIcon(file.name)}</div>
+          <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${file.path}</span>
+        `;
+
+        item.addEventListener("click", async () => {
+          await fetchAndInjectFile(file);
+        });
+
+        fileTreeContainer.appendChild(item);
+      });
+
+      renderIcons();
+    }
+
+    async function fetchAndInjectFile(file) {
+      showThinking(`Mengambil isi file ${file.path}...`);
+      try {
+        const owner = selectedRepo.owner || selectedRepo.full_name?.split('/')[0] || currentUser?.githubUsername;
+        const branch = selectedBranch || getRepoBranch(selectedRepo);
+        const res = await apiRequest(`/api/repos/${owner}/${selectedRepo.name}/file?path=${encodeURIComponent(file.path)}&branch=${encodeURIComponent(branch)}`);
+        removeThinking();
+        
+        const content = res.file?.content || "";
+        setContext({
+          type: "file",
+          repoName: selectedRepo.name,
+          branch: selectedBranch || getRepoBranch(selectedRepo),
+          path: file.path,
+          content
+        });
+
+        inputEl.value = `Tolong periksa dan review file \`${file.path}\` berikut:\n\n\`\`\`${file.lang || 'text'}\n${content}\n\`\`\`\n\nApa ada bug atau perbaikan performa yang disarankan?`;
+        inputEl.style.height = "auto";
+        inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
+        inputEl.focus();
+        updateSendState();
+
+        if (window.innerWidth <= 768) {
+          sidebar.classList.remove("open");
+          sidebarOverlay.classList.remove("open");
+        }
+      } catch (err) {
+        removeThinking();
+        addMessage("error", `Gagal memuat file: ${err.message}`);
+      }
+    }
+
+    function setContext(contextObj) {
+      activeContext = contextObj;
+      updateContextBanner();
+    }
+
+    function updateContextBanner() {
+      if (activeContext) {
+        contextBanner.classList.add("show");
+        const br = activeContext.branch || selectedBranch || (selectedRepo ? getRepoBranch(selectedRepo) : "main");
+        if (activeContext.type === "repo") {
+          contextBannerText.textContent = `Repo: ${activeContext.repoName} @ ${br}`;
+        } else {
+          contextBannerText.textContent = `File: ${activeContext.repoName}/${activeContext.path} @ ${br}`;
+        }
+        ctxMetaText.textContent = `${activeContext.repoName} @ ${br}`;
+      } else {
+        contextBanner.classList.remove("show");
+        if (selectedRepo) {
+          const br = selectedBranch || getRepoBranch(selectedRepo);
+          ctxMetaText.textContent = `${selectedRepo.name} @ ${br}`;
+        } else {
+          ctxMetaText.textContent = "Pilih repo di sidebar untuk konteks AI";
+        }
+      }
+      renderIcons();
+    }
+
+    btnClearContext.addEventListener("click", () => {
+      activeContext = null;
+      updateContextBanner();
+      addMessage("system", "ℹ️ Konteks aktif telah dibersihkan.");
+    });
+
+    btnInjectFullRepo.addEventListener("click", () => {
+      if (!selectedRepo) return;
+      setContext({ type: "repo", repoName: selectedRepo.name, branch: selectedBranch || getRepoBranch(selectedRepo) });
+      sendMessage(`Tolong jelaskan gambaran umum, arsitektur, dan struktur file dari repo **${selectedRepo.full_name || selectedRepo.name}**.`);
+      if (window.innerWidth <= 768) {
+        sidebar.classList.remove("open");
+        sidebarOverlay.classList.remove("open");
+      }
+    });
+
+    btnQuickReview.addEventListener("click", () => {
+      if (!selectedRepo) return;
+      setContext({ type: "repo", repoName: selectedRepo.name, branch: selectedBranch || getRepoBranch(selectedRepo) });
+      sendMessage(`Tolong lakukan Code Review menyeluruh untuk repositori **${selectedRepo.name}**. Identifikasi potensi security issue dan best practice yang perlu diperbaiki.`);
+    });
+
+    btnQuickRefactor.addEventListener("click", () => {
+      if (!selectedRepo) return;
+      setContext({ type: "repo", repoName: selectedRepo.name, branch: selectedBranch || getRepoBranch(selectedRepo) });
+      sendMessage(`Tolong berikan rekomendasi refactoring & clean code untuk repositori **${selectedRepo.name}**.`);
+    });
+
+    function clearEmpty() {
+      if (!hasMessages) {
+        emptyState.style.display = "none";
+        hasMessages = true;
+      }
+    }
+
+    function addMessage(role, content) {
+      clearEmpty();
+      const row = document.createElement("div");
+      row.className = `msg-row ${role}`;
+
+      const avatar = document.createElement("div");
+      avatar.className = "msg-avatar";
+      if (role === "assistant") {
+        avatar.innerHTML = '<i class="fa-brands fa-github"></i>';
+      } else if (role === "error") {
+        avatar.innerHTML = '<i data-lucide="alert-triangle" style="width: 14px; height: 14px;"></i>';
+      } else if (role === "system") {
+        avatar.innerHTML = '<i data-lucide="info" style="width: 14px; height: 14px;"></i>';
+      } else {
+        if (currentUser?.avatarUrl) {
+          avatar.innerHTML = `<img src="${currentUser.avatarUrl}" alt="Avatar">`;
+        } else {
+          avatar.textContent = (currentUser?.name || currentUser?.email || "U").charAt(0).toUpperCase();
         }
       }
 
-      if (e.target.closest('#logout-button')) {
-        clearAuth();
-        window.__GITHUB_AGENT_AUTH__ = null;
-        showLoginView();
+      const body = document.createElement("div");
+      body.className = "msg-body";
+
+      const roleEl = document.createElement("div");
+      roleEl.className = "msg-role";
+      roleEl.textContent = role === "user" ? (currentUser?.name || "You") : role === "error" ? "Error" : role === "system" ? "System Info" : "GitHub Agent";
+
+      const contentEl = document.createElement("div");
+      contentEl.className = "msg-content";
+
+      if ((role === "assistant" || role === "user" || role === "system") && window.marked && window.DOMPurify) {
+        const rawHtml = marked.parse(content);
+        contentEl.innerHTML = DOMPurify.sanitize(rawHtml);
+        if (role !== "system") enhanceCodeBlocks(contentEl);
+      } else {
+        contentEl.textContent = content;
+      }
+
+      body.appendChild(roleEl);
+      body.appendChild(contentEl);
+      row.appendChild(avatar);
+      row.appendChild(body);
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      renderIcons();
+      return row;
+    }
+
+    function enhanceCodeBlocks(container) {
+      const preElements = container.querySelectorAll("pre");
+      preElements.forEach((pre) => {
+        const code = pre.querySelector("code");
+        if (!code) return;
+
+        const wrapper = document.createElement("div");
+        wrapper.className = "code-container";
+
+        const langClass = Array.from(code.classList).find(c => c.startsWith("language-"));
+        const lang = langClass ? langClass.replace("language-", "") : "code";
+
+        const header = document.createElement("div");
+        header.className = "code-header";
+        header.innerHTML = `
+          <span>${lang}</span>
+          <button class="copy-btn" type="button">
+            <i data-lucide="copy" style="width: 12px; height: 12px;"></i> Salin
+          </button>
+        `;
+
+        const copyBtn = header.querySelector(".copy-btn");
+        copyBtn.addEventListener("click", () => {
+          const textToCopy = code.innerText;
+          const textarea = document.createElement("textarea");
+          textarea.value = textToCopy;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textarea);
+
+          copyBtn.innerHTML = `<i data-lucide="check" style="width: 12px; height: 12px; color:#10a37f;"></i> Tersalin!`;
+          renderIcons();
+          setTimeout(() => {
+            copyBtn.innerHTML = `<i data-lucide="copy" style="width: 12px; height: 12px;"></i> Salin`;
+            renderIcons();
+          }, 2000);
+        });
+
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(header);
+        wrapper.appendChild(pre);
+      });
+    }
+
+    function showThinking(label = "Memproses & mengeksekusi…") {
+      removeThinking();
+      clearEmpty();
+      const row = document.createElement("div");
+      row.className = "thinking-row";
+      row.id = "thinking-row";
+      row.innerHTML = `
+        <div class="msg-avatar" style="background:linear-gradient(135deg,#10a37f,#0d8c6d);"><i class="fa-brands fa-github"></i></div>
+        <div class="thinking-dots"><span></span><span></span><span></span></div>
+        <span style="font-size:13px; color:var(--text-secondary);">${label}</span>
+      `;
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      renderIcons();
+    }
+
+    function removeThinking() {
+      const t = document.getElementById("thinking-row");
+      if (t) t.remove();
+    }
+
+    function updateSendState() {
+      const hasText = inputEl.value.trim().length > 0;
+      sendBtn.disabled = !hasText || isBusy;
+      sendBtn.title = isBusy ? "Sedang memproses..." : !hasText ? "Tulis pesan terlebih dahulu" : "Kirim pesan (Enter)";
+    }
+
+    async function sendMessage(text) {
+      const value = (text ?? inputEl.value).trim();
+      if (!value || isBusy) return;
+
+      addMessage("user", value);
+      inputEl.value = "";
+      inputEl.style.height = "auto";
+      isBusy = true;
+      updateSendState();
+      showThinking();
+
+      try {
+        const payload = {
+          message: value,
+          context: activeContext ? {
+            repo: activeContext.repoName,
+            branch: activeContext.branch || selectedBranch || (selectedRepo ? getRepoBranch(selectedRepo) : undefined),
+            file: activeContext.path,
+            content: activeContext.content
+          } : (selectedRepo ? {
+            repo: selectedRepo.name,
+            branch: selectedBranch || getRepoBranch(selectedRepo)
+          } : null)
+        };
+
+        const data = await apiRequest("/api/chat", "POST", payload);
+        removeThinking();
+        addMessage("assistant", data.reply || "Instruksi berhasil dieksekusi.");
+      } catch (err) {
+        removeThinking();
+        addMessage("error", err.message || "Gagal memproses pesan.");
+      } finally {
+        isBusy = false;
+        updateSendState();
+        inputEl.focus();
+      }
+    }
+
+    sendBtn.addEventListener("click", () => sendMessage());
+
+    inputEl.addEventListener("input", () => {
+      inputEl.style.height = "auto";
+      inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
+      updateSendState();
+    });
+
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
       }
     });
+
+    document.querySelectorAll(".suggestion").forEach((btn) => {
+      if (btn.dataset.prompt) {
+        btn.addEventListener("click", () => {
+          sendMessage(btn.dataset.prompt);
+        });
+      }
+    });
+
+    async function boot() {
+      renderIcons();
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlError = urlParams.get("error");
+      if (urlError) {
+        showAuthError(urlError);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      if (window.location.hash.startsWith("#auth=")) {
+        try {
+          const authData = JSON.parse(decodeURIComponent(window.location.hash.replace("#auth=", "")));
+          setSession(authData.token, authData.user);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          enterChat(authData.user);
+          return;
+        } catch (e) {
+          console.error("Gagal mem-parsing auth payload:", e);
+        }
+      }
+
+      const token = getToken();
+      const user = getStoredUser();
+
+      if (!token || !user) {
+        showScreen("auth");
+        return;
+      }
+
+      try {
+        const data = await apiRequest("/auth/me");
+        setSession(token, data.user || user);
+        enterChat(data.user || user);
+      } catch {
+        clearSession();
+        showScreen("auth");
+      }
+    }
+
+    boot();
   </script>
 </body>
 </html>
