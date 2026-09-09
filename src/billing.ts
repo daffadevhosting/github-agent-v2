@@ -9,7 +9,8 @@ export type PlanFeature =
   | "semantic_search"
   | "external_provider"
   | "collaboration"
-  | "pro_editor";
+  | "pro_editor"
+  | "browser_lab";
 
 export const PLAN_LIMITS: Record<PlanName, { aiRequests: number; indexedRepos: number }> = {
   free: { aiRequests: 100, indexedRepos: 1 },
@@ -17,7 +18,7 @@ export const PLAN_LIMITS: Record<PlanName, { aiRequests: number; indexedRepos: n
   team: { aiRequests: 25000, indexedRepos: 100 },
 };
 
-/** Fitur per paket — free = chat only; pro/team = Monaco editor + full features */
+/** Fitur per paket — free = chat only; pro/team = Monaco + browser lab + full features */
 export const PLAN_FEATURES: Record<PlanName, PlanFeature[]> = {
   free: ["chat", "github_basic", "code_index", "semantic_search"],
   pro: [
@@ -28,6 +29,7 @@ export const PLAN_FEATURES: Record<PlanName, PlanFeature[]> = {
     "external_provider",
     "collaboration",
     "pro_editor",
+    "browser_lab",
   ],
   team: [
     "chat",
@@ -37,6 +39,7 @@ export const PLAN_FEATURES: Record<PlanName, PlanFeature[]> = {
     "external_provider",
     "collaboration",
     "pro_editor",
+    "browser_lab",
   ],
 };
 

@@ -11,6 +11,8 @@ A Cloudflare Agent that automates GitHub operations through natural language cha
 - Midtrans billing checkout + webhook activation
 - BYOK external AI providers (Pro+)
 - Collaboration rooms (Pro+)
+- Pro Code Editor (Monaco fullscreen) — Pro/Team only; hard-gated on commit APIs
+- Browser Lab (screenshot preview + E2E) via Cloudflare Browser Rendering — Pro/Team
 
 ## Production
 
@@ -45,8 +47,8 @@ npm run dev
 
 | Plan | AI requests / 30d | Indexed repos | Extra |
 |------|-------------------|---------------|-------|
-| Free | 100 | 1 | Chat, GitHub, editor, search |
-| Pro | 5000 | 10 | BYOK + collaboration |
+| Free | 100 | 1 | Chat, GitHub, code search (file → chat only) |
+| Pro | 5000 | 10 | Monaco editor, BYOK, collab, Browser Lab |
 | Team | 25000 | 100 | All Pro features |
 
 ## Learn More

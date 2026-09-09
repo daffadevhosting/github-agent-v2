@@ -928,6 +928,20 @@
     }
     .editor-toolbar-left, .editor-toolbar-right { display: flex; align-items: center; gap: 7px; }
     .editor-file-name { color: var(--text-secondary); font: 12px var(--font-code); }
+    .pro-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #171717;
+      background: linear-gradient(135deg, #f5c542, #eab308);
+      border: 1px solid rgba(245, 197, 66, 0.5);
+      flex-shrink: 0;
+    }
     #monaco-container {
       flex: 1;
       min-height: 0;
@@ -1770,11 +1784,12 @@
             </div>
           </section>
           <section class="platform-section full">
-            <h3><i data-lucide="terminal-square" style="width:14px;"></i> AI Terminal &amp; Browser Lab</h3>
-            <p>Gunakan chat untuk menghasilkan perintah Git/Docker. Browser preview dan E2E akan tersedia setelah binding Browser Rendering dikonfigurasi.</p>
+            <h3><i data-lucide="terminal-square" style="width:14px;"></i> AI Terminal &amp; Browser Lab <span class="pro-badge" style="margin-left:6px; vertical-align:middle;">PRO</span></h3>
+            <p>Preview halaman publik dan cek E2E sederhana via Cloudflare Browser Rendering (Pro/Team).</p>
             <div class="platform-actions">
               <button class="platform-btn" id="terminal-prompt-btn" type="button">Generate Command</button>
-              <button class="platform-btn" id="browser-preview-btn" type="button">Browser Preview</button>
+              <button class="platform-btn" id="browser-preview-btn" type="button"><i data-lucide="camera"></i> Browser Preview</button>
+              <button class="platform-btn" id="browser-e2e-btn" type="button"><i data-lucide="flask-conical"></i> E2E Check</button>
             </div>
           </section>
         </div>
@@ -1789,6 +1804,7 @@
           <button class="btn-icon" data-close-panel="editor-panel" type="button" title="Tutup editor" style="margin-right:4px;">
             <i data-lucide="x"></i>
           </button>
+          <span class="pro-badge" title="Fitur paket Pro / Team">PRO</span>
           <span class="editor-file-name" id="editor-file-name">Belum ada file</span>
         </div>
         <div class="editor-toolbar-right">
@@ -2659,6 +2675,7 @@
           ["External AI provider (BYOK)", !!(features?.external_provider)],
           ["Live collaboration", !!(features?.collaboration)],
           ["Pro code editor (Monaco)", !!(features?.pro_editor)],
+          ["Browser Lab (preview + E2E)", !!(features?.browser_lab)],
         ];
         featureList.innerHTML = rows.map(([label, ok]) =>
           `<li style="color:${ok ? "var(--text-secondary)" : "var(--text-muted)"}">${ok ? "✓" : "✗"} ${label}</li>`
@@ -2767,9 +2784,69 @@
       inputEl.focus();
     });
 
-    document.getElementById("browser-preview-btn").addEventListener("click", () => {
-      addMessage("system", "🌐 Browser Preview membutuhkan binding Browser Rendering dan endpoint preview yang belum dikonfigurasi.");
-    });
+    async function runBrowserPreview() {
+      if (!requireFeature("browser_lab", "Browser Lab")) return;
+      closePanel("settings-panel");
+      const url = window.prompt("URL halaman untuk di-screenshot:", "https://example.com");
+      if (!url) return;
+      showThinking("Mengambil screenshot via Browser Rendering…");
+      try {
+        const data = await apiRequest("/api/browser/preview", "POST", { url, fullPage: false });
+        removeThinking();
+        const img = data.screenshotBase64
+          ? `\n\n![preview](data:${data.mimeType || "image/png"};base64,${data.screenshotBase64})`
+          : "";
+        addMessage(
+          "system",
+          `🌐 **Browser Preview**\n- URL: ${data.url}\n- Title: ${data.title || "(tanpa judul)"}${img}`
+        );
+      } catch (err) {
+        removeThinking();
+        addMessage("error", err.message || "Gagal browser preview");
+      }
+    }
+
+    async function runBrowserE2E() {
+      if (!requireFeature("browser_lab", "Browser Lab")) return;
+      closePanel("settings-panel");
+      const url = window.prompt("URL untuk E2E check:", "https://example.com");
+      if (!url) return;
+      const selector = window.prompt("CSS selector opsional (kosongkan jika tidak perlu):", "h1") || "";
+      const expectText = selector
+        ? (window.prompt("Teks yang diharapkan di selector (opsional):", "") || "")
+        : "";
+      showThinking("Menjalankan E2E browser check…");
+      try {
+        const data = await apiRequest("/api/browser/e2e", "POST", {
+          url,
+          selector: selector || undefined,
+          expectText: expectText || undefined,
+        });
+        removeThinking();
+        const statusIcon = data.passed ? "✅" : "❌";
+        const img = data.screenshotBase64
+          ? `\n\n![e2e](data:${data.mimeType || "image/png"};base64,${data.screenshotBase64})`
+          : "";
+        addMessage(
+          "system",
+          `${statusIcon} **E2E Check** ${data.passed ? "PASSED" : "FAILED"}\n` +
+            `- URL: ${data.url}\n` +
+            `- HTTP: ${data.status}\n` +
+            `- Title: ${data.title || "(tanpa judul)"}\n` +
+            (data.selector ? `- Selector \`${data.selector}\`: ${data.selectorFound ? "ditemukan" : "tidak ditemukan"}\n` : "") +
+            (data.textMatch !== null && data.textMatch !== undefined
+              ? `- Text match: ${data.textMatch ? "ya" : "tidak"}\n`
+              : "") +
+            `- Durasi: ${data.durationMs}ms${img}`
+        );
+      } catch (err) {
+        removeThinking();
+        addMessage("error", err.message || "Gagal E2E browser");
+      }
+    }
+
+    document.getElementById("browser-preview-btn").addEventListener("click", runBrowserPreview);
+    document.getElementById("browser-e2e-btn").addEventListener("click", runBrowserE2E);
 
     document.getElementById("editor-show-diff").addEventListener("click", () => {
       renderSimpleDiff(editorOriginalContent, getEditorContent());

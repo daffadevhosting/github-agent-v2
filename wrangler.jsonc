@@ -15,6 +15,10 @@
 	"ai": {
 		"binding": "AI"
 	},
+	// Cloudflare Browser Rendering (Puppeteer) — preview & E2E
+	"browser": {
+		"binding": "BROWSER"
+	},
 	// Binding Cloudflare D1 Database
 	"d1_databases": [
 		{

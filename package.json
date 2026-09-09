@@ -13,6 +13,7 @@
     "jose": "^5.9.0"
   },
   "devDependencies": {
+    "@cloudflare/puppeteer": "^1.0.2",
     "@cloudflare/vitest-pool-workers": "^0.8.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",

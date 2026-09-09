@@ -317,6 +317,13 @@ export default {
     if (path === "/api/repo/file" && request.method === "PUT") {
       const user = await getAuthenticatedUser(request, env);
       if (!user) return json({ error: "Unauthorized" }, 401);
+      // Hard-gate: commit via Pro Editor hanya Pro / Team
+      try {
+        const usage = await getUsageState(env.DB, user.email);
+        assertPlanFeature(usage.plan, "pro_editor");
+      } catch (err: any) {
+        return json({ error: err.message || "Pro Code Editor hanya tersedia di paket Pro." }, 402);
+      }
       const token = user.githubToken || env.GITHUB_TOKEN;
       if (!token) return json({ error: "Akun GitHub belum terhubung." }, 400);
       const body = (await request.json().catch(() => ({}))) as {
@@ -368,6 +375,13 @@ export default {
     if (path === "/api/repo/preview" && request.method === "POST") {
       const user = await getAuthenticatedUser(request, env);
       if (!user) return json({ error: "Unauthorized" }, 401);
+      // Hard-gate: approval token untuk Pro Editor hanya Pro / Team
+      try {
+        const usage = await getUsageState(env.DB, user.email);
+        assertPlanFeature(usage.plan, "pro_editor");
+      } catch (err: any) {
+        return json({ error: err.message || "Pro Code Editor hanya tersedia di paket Pro." }, 402);
+      }
       const token = user.githubToken || env.GITHUB_TOKEN;
       const body = (await request.json().catch(() => ({}))) as {
         owner?: string; repo?: string; branch?: string; path?: string; content?: string;
@@ -387,6 +401,134 @@ export default {
         return json({ approved: true, baseSha: current.sha, approvalToken, expiresIn: 600 });
       } catch (err: any) {
         return json({ error: err.message || "Gagal membuat preview perubahan." }, 409);
+      }
+    }
+
+    // Browser Rendering — preview screenshot & simple E2E (Pro/Team)
+    if (path === "/api/browser/preview" && request.method === "POST") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      try {
+        const usage = await getUsageState(env.DB, user.email);
+        assertPlanFeature(usage.plan, "browser_lab");
+      } catch (err: any) {
+        return json({ error: err.message || "Browser Lab hanya tersedia di paket Pro." }, 402);
+      }
+      if (!env.BROWSER) {
+        return json({ error: "Browser Rendering belum dikonfigurasi (binding BROWSER)." }, 503);
+      }
+      const body = (await request.json().catch(() => ({}))) as {
+        url?: string;
+        fullPage?: boolean;
+        width?: number;
+        height?: number;
+      };
+      let targetUrl = (body.url || "").trim();
+      if (!targetUrl) return json({ error: "Parameter url wajib diisi." }, 400);
+      try {
+        targetUrl = new URL(targetUrl).toString();
+      } catch {
+        return json({ error: "URL tidak valid." }, 400);
+      }
+      try {
+        const puppeteer = await import("@cloudflare/puppeteer");
+        const browser = await puppeteer.default.launch(env.BROWSER);
+        const page = await browser.newPage();
+        await page.setViewport({
+          width: Math.min(Math.max(body.width || 1280, 320), 1920),
+          height: Math.min(Math.max(body.height || 720, 240), 1080),
+        });
+        await page.goto(targetUrl, { waitUntil: "networkidle0", timeout: 30000 });
+        const title = await page.title();
+        const screenshot = (await page.screenshot({
+          type: "png",
+          fullPage: !!body.fullPage,
+          encoding: "base64",
+        })) as string;
+        await browser.close();
+        return json({
+          ok: true,
+          url: targetUrl,
+          title,
+          screenshotBase64: screenshot,
+          mimeType: "image/png",
+        });
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal mengambil screenshot browser." }, 500);
+      }
+    }
+
+    if (path === "/api/browser/e2e" && request.method === "POST") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      try {
+        const usage = await getUsageState(env.DB, user.email);
+        assertPlanFeature(usage.plan, "browser_lab");
+      } catch (err: any) {
+        return json({ error: err.message || "Browser Lab hanya tersedia di paket Pro." }, 402);
+      }
+      if (!env.BROWSER) {
+        return json({ error: "Browser Rendering belum dikonfigurasi (binding BROWSER)." }, 503);
+      }
+      const body = (await request.json().catch(() => ({}))) as {
+        url?: string;
+        selector?: string;
+        expectText?: string;
+        timeoutMs?: number;
+      };
+      let targetUrl = (body.url || "").trim();
+      if (!targetUrl) return json({ error: "Parameter url wajib diisi." }, 400);
+      try {
+        targetUrl = new URL(targetUrl).toString();
+      } catch {
+        return json({ error: "URL tidak valid." }, 400);
+      }
+      const timeout = Math.min(Math.max(body.timeoutMs || 15000, 3000), 45000);
+      try {
+        const puppeteer = await import("@cloudflare/puppeteer");
+        const browser = await puppeteer.default.launch(env.BROWSER);
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1280, height: 720 });
+        const started = Date.now();
+        const response = await page.goto(targetUrl, { waitUntil: "networkidle0", timeout });
+        const status = response?.status() ?? 0;
+        const title = await page.title();
+        let selectorFound = false;
+        let textMatch: boolean | null = null;
+        if (body.selector) {
+          try {
+            await page.waitForSelector(body.selector, { timeout: Math.min(timeout, 10000) });
+            selectorFound = true;
+            if (body.expectText) {
+              const elText = await page.$eval(body.selector, (el: Element) => (el.textContent || "").trim());
+              textMatch = elText.toLowerCase().includes(body.expectText.toLowerCase());
+            }
+          } catch {
+            selectorFound = false;
+          }
+        }
+        const screenshot = (await page.screenshot({ type: "png", encoding: "base64" })) as string;
+        await browser.close();
+        const passed =
+          status >= 200 &&
+          status < 400 &&
+          (body.selector ? selectorFound : true) &&
+          (body.expectText ? textMatch === true : true);
+        return json({
+          ok: true,
+          passed,
+          url: targetUrl,
+          status,
+          title,
+          selector: body.selector || null,
+          selectorFound: body.selector ? selectorFound : null,
+          textMatch,
+          durationMs: Date.now() - started,
+          screenshotBase64: screenshot,
+          mimeType: "image/png",
+        });
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal menjalankan E2E browser." }, 500);
       }
     }
 
@@ -578,6 +720,7 @@ export default {
           code_index: planAllows(usage.plan, "code_index"),
           semantic_search: planAllows(usage.plan, "semantic_search"),
           pro_editor: planAllows(usage.plan, "pro_editor"),
+          browser_lab: planAllows(usage.plan, "browser_lab"),
         },
       });
     }
