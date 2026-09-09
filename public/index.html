@@ -1690,10 +1690,36 @@
           </section>
           <section class="platform-section">
             <h3><i data-lucide="credit-card" style="width:14px;"></i> Plan &amp; Usage</h3>
-            <p>Plan saat ini: <strong id="current-plan-label">Free</strong></p>
+            <p>Plan saat ini: <strong id="current-plan-label">Free</strong>
+              <span id="plan-status-badge" style="margin-left:8px;font-size:11px;opacity:.8;"></span>
+            </p>
+            <p id="plan-expires-label" style="font-size:12px;color:var(--text-muted);margin:4px 0 8px;"></p>
             <div class="usage-bar"><span id="usage-bar-fill"></span></div>
-            <p id="usage-label" style="margin-top:7px;">32 / 100 AI request bulan ini</p>
-            <div class="platform-actions"><button class="platform-btn pro" id="upgrade-plan-btn" type="button"><i data-lucide="sparkles"></i> Upgrade Pro</button></div>
+            <p id="usage-label" style="margin-top:7px;">0 / 100 AI request bulan ini</p>
+            <p id="index-usage-label" style="font-size:12px;color:var(--text-muted);margin-top:4px;">Indexed repos: 0 / 1</p>
+            <ul id="plan-features-list" style="margin:10px 0 0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.5;"></ul>
+            <div class="plan-cards" id="plan-cards" style="display:grid;gap:10px;margin-top:12px;">
+              <div class="platform-section" style="margin:0;padding:12px;border:1px solid var(--border);border-radius:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <strong>Pro</strong>
+                  <span style="font-size:12px;color:var(--text-muted);">Rp 99.000 / 30 hari</span>
+                </div>
+                <p style="font-size:12px;margin:6px 0 10px;color:var(--text-secondary);">5.000 AI req · 10 repo index · BYOK · Collaboration</p>
+                <button class="platform-btn pro" id="upgrade-plan-btn" type="button" data-plan="pro">
+                  <i data-lucide="sparkles"></i> Upgrade Pro
+                </button>
+              </div>
+              <div class="platform-section" style="margin:0;padding:12px;border:1px solid var(--border);border-radius:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                  <strong>Team</strong>
+                  <span style="font-size:12px;color:var(--text-muted);">Rp 299.000 / 30 hari</span>
+                </div>
+                <p style="font-size:12px;margin:6px 0 10px;color:var(--text-secondary);">25.000 AI req · 100 repo index · semua fitur Pro</p>
+                <button class="platform-btn" id="upgrade-team-btn" type="button" data-plan="team" style="border-color:#8b5cf6;color:#ddd6fe;">
+                  <i data-lucide="users"></i> Upgrade Team
+                </button>
+              </div>
+            </div>
           </section>
           <section class="platform-section full">
             <h3><i data-lucide="terminal-square" style="width:14px;"></i> AI Terminal &amp; Browser Lab</h3>
@@ -1826,6 +1852,8 @@
     let currentUser = null;
     let userRepos = [];
     let selectedRepo = null;
+    let currentUsage = null;
+    let currentFeatures = null;
     let selectedBranch = null;
     let activeContext = null;
 
@@ -2072,6 +2100,7 @@
     }
 
     function openCollaboration() {
+      if (!requireFeature("collaboration", "Live collaboration")) return;
       try {
         const info = currentRepoInfo();
         const room = `${info.owner}/${info.repo}/${info.branch}`;
@@ -2161,6 +2190,7 @@
     async function enterChat(user) {
       applyUserUI(user);
       showScreen("chat");
+        refreshUsage(true);
       inputEl.focus();
       renderIcons();
       await fetchRepos();
@@ -2483,15 +2513,123 @@
     indexRepoBtn.addEventListener("click", indexSelectedRepo);
     searchCodebaseBtn.addEventListener("click", () => openPanel("search-panel"));
     collabBtn.addEventListener("click", openCollaboration);
+
+    function formatExpiry(ts) {
+      if (!ts) return "";
+      try {
+        return new Date(ts).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+      } catch { return ""; }
+    }
+
+    async function refreshUsage(silent = true) {
+      try {
+        const data = await apiRequest("/api/billing/status");
+        currentUsage = data.usage || null;
+        currentFeatures = data.features || null;
+        applyUsageToUI(currentUsage, currentFeatures);
+        return currentUsage;
+      } catch (err) {
+        if (!silent) addMessage("error", err.message || "Gagal memuat status paket");
+        return null;
+      }
+    }
+
+    function applyUsageToUI(usage, features) {
+      if (!usage) return;
+      const plan = String(usage.plan || "free").toLowerCase();
+      const planLabel = document.getElementById("current-plan-label");
+      const statusBadge = document.getElementById("plan-status-badge");
+      const expiresLabel = document.getElementById("plan-expires-label");
+      const usageLabel = document.getElementById("usage-label");
+      const indexLabel = document.getElementById("index-usage-label");
+      const bar = document.getElementById("usage-bar-fill");
+      const upgradeBtn = document.getElementById("upgrade-plan-btn");
+      const featureList = document.getElementById("plan-features-list");
+
+      if (planLabel) planLabel.textContent = plan.toUpperCase();
+      if (statusBadge) {
+        const st = usage.subscriptionStatus || (plan === "free" ? "inactive" : "active");
+        statusBadge.textContent = plan === "free" ? "(Free tier)" : `(${st})`;
+      }
+      if (expiresLabel) {
+        expiresLabel.textContent = usage.subscriptionExpiresAt && plan !== "free"
+          ? `Aktif sampai ${formatExpiry(usage.subscriptionExpiresAt)}`
+          : plan === "free"
+            ? "Upgrade ke Pro untuk BYOK provider, collaboration, dan kuota lebih besar."
+            : "";
+      }
+      if (usageLabel) usageLabel.textContent = `${usage.aiRequests || 0} / ${usage.aiRequestLimit || 0} AI request bulan ini`;
+      if (indexLabel) indexLabel.textContent = `Indexed repos: ${usage.indexedRepos || 0} / ${usage.indexedRepoLimit || 0}`;
+      if (bar) {
+        const pct = usage.aiRequestLimit ? Math.min(100, ((usage.aiRequests || 0) / usage.aiRequestLimit) * 100) : 0;
+        bar.style.width = `${pct}%`;
+      }
+      const teamBtn = document.getElementById("upgrade-team-btn");
+      if (upgradeBtn) {
+        if (plan === "pro" || plan === "team") {
+          upgradeBtn.disabled = true;
+          upgradeBtn.innerHTML = plan === "pro"
+            ? `<i data-lucide="check"></i> PRO aktif`
+            : `<i data-lucide="sparkles"></i> Turun ke Pro tidak tersedia`;
+          // Dari Team tidak perlu tombol Pro
+          if (plan === "team") upgradeBtn.style.display = "none";
+          else upgradeBtn.style.display = "";
+        } else {
+          upgradeBtn.disabled = false;
+          upgradeBtn.style.display = "";
+          upgradeBtn.innerHTML = `<i data-lucide="sparkles"></i> Upgrade Pro`;
+        }
+      }
+      if (teamBtn) {
+        if (plan === "team") {
+          teamBtn.disabled = true;
+          teamBtn.innerHTML = `<i data-lucide="check"></i> TEAM aktif`;
+        } else {
+          teamBtn.disabled = false;
+          teamBtn.innerHTML = `<i data-lucide="users"></i> Upgrade Team`;
+        }
+      }
+      renderIcons();
+      if (featureList) {
+        const rows = [
+          ["Chat + GitHub automation", true],
+          ["Semantic code index", !!(features?.code_index ?? true)],
+          ["External AI provider (BYOK)", !!(features?.external_provider)],
+          ["Live collaboration", !!(features?.collaboration)],
+          ["Pro code editor", !!(features?.pro_editor ?? true)],
+        ];
+        featureList.innerHTML = rows.map(([label, ok]) =>
+          `<li style="color:${ok ? "var(--text-secondary)" : "var(--text-muted)"}">${ok ? "✓" : "✗"} ${label}</li>`
+        ).join("");
+      }
+
+      // Gate provider select for free
+      const providerSelect = document.getElementById("provider-select");
+      if (providerSelect) {
+        const allowExternal = !!(features?.external_provider);
+        [...providerSelect.options].forEach((opt) => {
+          if (opt.value !== "workers-ai") opt.disabled = !allowExternal;
+        });
+        if (!allowExternal && providerSelect.value !== "workers-ai") {
+          providerSelect.value = "workers-ai";
+        }
+      }
+    }
+
+    function requireFeature(feature, label) {
+      if (currentFeatures && currentFeatures[feature]) return true;
+      addMessage("system", `🔒 **${label || feature}** tersedia di paket **Pro**. Buka Settings → Upgrade Pro.`);
+      openPanel("settings-panel");
+      refreshUsage(true);
+      return false;
+    }
+
     settingsBtn.addEventListener("click", async () => {
       openPanel("settings-panel");
       try {
-        const [provider, usage] = await Promise.all([apiRequest("/api/provider"), apiRequest("/api/usage")]);
+        const provider = await apiRequest("/api/provider");
         document.getElementById("provider-select").value = provider.provider || "workers-ai";
-        const state = usage.usage;
-        document.getElementById("current-plan-label").textContent = String(state.plan || "free").toUpperCase();
-        document.getElementById("usage-label").textContent = `${state.aiRequests} / ${state.aiRequestLimit} AI request bulan ini`;
-        document.getElementById("usage-bar-fill").style.width = `${Math.min(100, (state.aiRequests / state.aiRequestLimit) * 100)}%`;
+        await refreshUsage(true);
       } catch (err) {
         addMessage("error", err.message);
       }
@@ -2520,6 +2658,7 @@
       try {
         const provider = document.getElementById("provider-select").value;
         const apiKey = document.getElementById("provider-key-input").value.trim();
+        if (provider !== "workers-ai" && !requireFeature("external_provider", "External AI provider")) return;
         await apiRequest("/api/provider", "PUT", { provider, apiKey: apiKey || undefined });
         document.getElementById("provider-key-input").value = "";
         addMessage("system", "⚙️ Provider tersimpan aman di server. API key tidak disimpan di browser.");
@@ -2529,23 +2668,34 @@
       }
     });
 
-    document.getElementById("upgrade-plan-btn").addEventListener("click", async () => {
-      const button = document.getElementById("upgrade-plan-btn");
+    async function startPlanCheckout(plan, button) {
+      if (!button || button.disabled) return;
       const original = button.innerHTML;
       button.disabled = true;
       button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Menyiapkan pembayaran…`;
       try {
-        const checkout = await apiRequest("/api/billing/checkout", "POST", { plan: "pro" });
+        const checkout = await apiRequest("/api/billing/checkout", "POST", { plan });
         if (!checkout.redirectUrl) throw new Error("Midtrans tidak mengembalikan URL pembayaran.");
         window.open(checkout.redirectUrl, "_blank", "noopener,noreferrer");
-        addMessage("system", `💳 Checkout Pro dibuat dengan order **${checkout.orderId}**. Selesaikan pembayaran di tab Midtrans; paket akan aktif setelah notifikasi pembayaran terverifikasi.`);
+        addMessage(
+          "system",
+          `💳 Checkout **${String(plan).toUpperCase()}** dibuat (order **${checkout.orderId}**). Selesaikan pembayaran di tab Midtrans. Setelah webhook terverifikasi, paket aktif di https://github-agent.studiocode.workers.dev/`
+        );
       } catch (err) {
         addMessage("error", err.message);
       } finally {
         button.disabled = false;
         button.innerHTML = original;
         renderIcons();
+        refreshUsage(true);
       }
+    }
+
+    document.getElementById("upgrade-plan-btn").addEventListener("click", () => {
+      startPlanCheckout("pro", document.getElementById("upgrade-plan-btn"));
+    });
+    document.getElementById("upgrade-team-btn").addEventListener("click", () => {
+      startPlanCheckout("team", document.getElementById("upgrade-team-btn"));
     });
 
     document.getElementById("terminal-prompt-btn").addEventListener("click", () => {
@@ -2771,6 +2921,12 @@
         const data = await apiRequest("/api/chat", "POST", payload);
         removeThinking();
         addMessage("assistant", data.reply || "Instruksi berhasil dieksekusi.");
+        if (data.usage) {
+          currentUsage = data.usage;
+          applyUsageToUI(currentUsage, currentFeatures);
+        } else {
+          refreshUsage(true);
+        }
       } catch (err) {
         removeThinking();
         addMessage("error", err.message || "Gagal memproses pesan.");
@@ -2806,6 +2962,16 @@
 
     async function boot() {
       renderIcons();
+
+      // Callback Midtrans / refresh status paket
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("billing") === "success") {
+          addMessage("system", "💳 Pembayaran diterima. Status paket akan aktif setelah webhook Midtrans terverifikasi (biasanya beberapa detik).");
+          history.replaceState({}, "", window.location.pathname);
+        }
+      } catch {}
+
 
       const urlParams = new URLSearchParams(window.location.search);
       const urlError = urlParams.get("error");

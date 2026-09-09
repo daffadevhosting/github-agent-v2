@@ -179,6 +179,7 @@ export async function updateSubscription(
 ): Promise<void> {
   await ensurePlatformSchema(db);
   const now = Date.now();
+  // Aktivasi paket: reset kuota periode + status normalisasi (active/expired)
   const normalizedStatus =
     status === "settlement" || status === "capture" || status === "active"
       ? "active"
@@ -199,10 +200,14 @@ export async function updateSubscription(
   ).bind(email.toLowerCase(), plan, now, normalizedStatus, expiresAt, now).run();
 }
 
+/** Pastikan baris entitlement free tersedia untuk user baru */
 export async function ensureUserEntitlement(db: D1Database, email: string): Promise<void> {
   await getUsageState(db, email);
 }
 
+/**
+ * Mengambil data pengguna berdasarkan email
+ */
 export async function getUserByEmail(db: D1Database, email: string): Promise<UserRecord | null> {
   const row = await db
     .prepare(
@@ -222,6 +227,9 @@ export async function getUserByEmail(db: D1Database, email: string): Promise<Use
   return row || null;
 }
 
+/**
+ * Mendaftarkan atau memperbarui pengguna yang login via GitHub OAuth
+ */
 export async function upsertGitHubUser(
   db: D1Database,
   data: {
@@ -294,6 +302,9 @@ export async function upsertGitHubUser(
   };
 }
 
+/**
+ * Pendaftaran akun manual (email & password)
+ */
 export async function createManualUser(
   db: D1Database,
   user: { email: string; name: string; passwordHash: string; salt: string }
@@ -315,6 +326,7 @@ export async function createManualUser(
     .bind(emailNorm, now)
     .run();
 
+  // Akun baru selalu mulai dari paket free + kuota 0
   await ensurePlatformSchema(db);
   await db.prepare(
     `INSERT OR IGNORE INTO account_entitlements
@@ -333,6 +345,9 @@ export async function createManualUser(
   };
 }
 
+/**
+ * Mengambil status repositori dan branch aktif
+ */
 export async function getUserState(db: D1Database, email: string): Promise<AgentState> {
   const row = await db
     .prepare("SELECT current_repo as currentRepo, current_branch as currentBranch FROM user_states WHERE email = ?")
@@ -345,6 +360,9 @@ export async function getUserState(db: D1Database, email: string): Promise<Agent
   };
 }
 
+/**
+ * Menyimpan status repositori dan branch aktif
+ */
 export async function saveUserState(
   db: D1Database,
   email: string,
@@ -369,6 +387,9 @@ export async function saveUserState(
   return { currentRepo: updatedRepo, currentBranch: updatedBranch };
 }
 
+/**
+ * Mencatat log riwayat percakapan
+ */
 export async function logChatMessage(
   db: D1Database,
   email: string,

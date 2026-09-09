@@ -21,7 +21,7 @@ import { getGitHubAuthorizeUrl, createOAuthState, handleGitHubOAuthCallback } fr
 import { listUserRepositories, getRepoTree, getFile, createOrUpdateFile } from "./github";
 import { indexRepositoryFiles, searchRepository } from "./rag";
 import { CollaborationRoom } from "./collaboration";
-import { createMidtransCheckout, getPlanPrice, verifyMidtransSignature } from "./billing";
+import { assertPlanFeature, createMidtransCheckout, getPlanPrice, PLAN_DURATION_MS, planAllows, verifyMidtransSignature } from "./billing";
 import { encryptProviderKey, type ProviderName } from "./providers";
 
 const corsHeaders: HeadersInit = {
@@ -408,6 +408,12 @@ export default {
     if (path === "/api/repo/index" && request.method === "POST") {
       const user = await getAuthenticatedUser(request, env);
       if (!user) return json({ error: "Unauthorized" }, 401);
+      {
+        const usage = await getUsageState(env.DB, user.email);
+        try { assertPlanFeature(usage.plan, "code_index"); } catch (err: any) {
+          return json({ error: err.message }, 402);
+        }
+      }
       if (!env.VECTOR_INDEX) return json({ error: "Vectorize belum dikonfigurasi." }, 503);
       const body = (await request.json().catch(() => ({}))) as {
         owner?: string;
@@ -467,8 +473,16 @@ export default {
       if (!["workers-ai", "openai", "anthropic", "deepseek"].includes(provider)) {
         return json({ error: "Provider tidak didukung." }, 400);
       }
-      if (provider !== "workers-ai" && !body.apiKey) {
-        return json({ error: "API key wajib diisi untuk provider eksternal." }, 400);
+      if (provider !== "workers-ai") {
+        const usage = await getUsageState(env.DB, user.email);
+        try {
+          assertPlanFeature(usage.plan, "external_provider");
+        } catch (err: any) {
+          return json({ error: err.message }, 402);
+        }
+        if (!body.apiKey) {
+          return json({ error: "API key wajib diisi untuk provider eksternal." }, 400);
+        }
       }
       const encrypted = body.apiKey ? await encryptProviderKey(env, body.apiKey.trim()) : null;
       await updateProviderSettings(env.DB, user.email, provider, encrypted?.encrypted || null, encrypted?.iv || null);
@@ -505,6 +519,12 @@ export default {
     if (path === "/api/repo/search" && request.method === "POST") {
       const user = await getAuthenticatedUser(request, env);
       if (!user) return json({ error: "Unauthorized" }, 401);
+      {
+        const usage = await getUsageState(env.DB, user.email);
+        try { assertPlanFeature(usage.plan, "semantic_search"); } catch (err: any) {
+          return json({ error: err.message }, 402);
+        }
+      }
       if (!env.VECTOR_INDEX) return json({ error: "Vectorize belum dikonfigurasi." }, 503);
       const body = (await request.json().catch(() => ({}))) as {
         owner?: string;
@@ -533,11 +553,33 @@ export default {
         : request;
       const user = await getAuthenticatedUser(authRequest, env);
       if (!user) return json({ error: "Unauthorized" }, 401);
+      {
+        const usage = await getUsageState(env.DB, user.email);
+        try { assertPlanFeature(usage.plan, "collaboration"); } catch (err: any) {
+          return json({ error: err.message }, 402);
+        }
+      }
       if (!env.COLLABORATION_ROOM) return json({ error: "Collaboration belum dikonfigurasi." }, 503);
       const roomName = decodeURIComponent(path.slice("/api/collaboration/".length)).trim();
       if (!roomName || roomName.length > 120) return json({ error: "Nama room tidak valid." }, 400);
       const id = env.COLLABORATION_ROOM.idFromName(roomName);
       return env.COLLABORATION_ROOM.get(id).fetch(authRequest);
+    }
+
+    if (path === "/api/billing/status" && request.method === "GET") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      const usage = await getUsageState(env.DB, user.email);
+      return json({
+        usage,
+        features: {
+          external_provider: planAllows(usage.plan, "external_provider"),
+          collaboration: planAllows(usage.plan, "collaboration"),
+          code_index: planAllows(usage.plan, "code_index"),
+          semantic_search: planAllows(usage.plan, "semantic_search"),
+          pro_editor: planAllows(usage.plan, "pro_editor"),
+        },
+      });
     }
 
     if (path === "/api/billing/midtrans/webhook" && request.method === "POST") {
@@ -568,7 +610,15 @@ export default {
         }
         await updatePaymentOrder(env.DB, body.order_id, status);
         if ((status === "settlement" || status === "capture") && (order.plan === "pro" || order.plan === "team")) {
-          await updateSubscription(env.DB, order.email, order.plan, status, Date.now() + 30 * 24 * 60 * 60 * 1000);
+          await updateSubscription(
+            env.DB,
+            order.email,
+            order.plan as "pro" | "team",
+            "active",
+            Date.now() + PLAN_DURATION_MS
+          );
+        } else if (status === "expire" || status === "deny" || status === "cancel") {
+          // Jangan downgrade paksa di sini kecuali order yang sama; expiry ditangani getUsageState
         }
         return json({ accepted: true, transactionStatus: status });
       } catch (err: any) {
@@ -596,9 +646,9 @@ export default {
           await saveUserState(env.DB, user.email, stateUpdate);
         }
 
-        await consumeAiRequest(env.DB, user.email);
+        const usageAfter = await consumeAiRequest(env.DB, user.email);
         const result = await processAgentMessage(env, user, message);
-        return json(result);
+        return json({ ...result, usage: usageAfter });
       } catch (err: any) {
         const message = err.message || "Gagal memproses pesan";
         return json({ error: message }, message.includes("Batas AI") ? 402 : 500);
