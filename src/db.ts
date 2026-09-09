@@ -360,6 +360,9 @@ export async function getUserState(db: D1Database, email: string): Promise<Agent
   };
 }
 
+/**
+ * Menyimpan status repositori dan branch aktif
+ */
 export async function saveUserState(
   db: D1Database,
   email: string,
@@ -384,6 +387,9 @@ export async function saveUserState(
   return { currentRepo: updatedRepo, currentBranch: updatedBranch };
 }
 
+/**
+ * Mencatat log riwayat percakapan
+ */
 export async function logChatMessage(
   db: D1Database,
   email: string,
