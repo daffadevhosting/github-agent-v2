@@ -14,7 +14,6 @@ import {
   createPaymentOrder,
   getPaymentOrder,
   updatePaymentOrder,
-  ensureUserEntitlement,
 } from "./db";
 import { processAgentMessage } from "./agent-executor";
 import { verifyAccess } from "./auth";
@@ -22,7 +21,7 @@ import { getGitHubAuthorizeUrl, createOAuthState, handleGitHubOAuthCallback } fr
 import { listUserRepositories, getRepoTree, getFile, createOrUpdateFile } from "./github";
 import { indexRepositoryFiles, searchRepository } from "./rag";
 import { CollaborationRoom } from "./collaboration";
-import { createMidtransCheckout, getPlanPrice, verifyMidtransSignature, assertPlanFeature, PLAN_FEATURES } from "./billing";
+import { createMidtransCheckout, getPlanPrice, verifyMidtransSignature } from "./billing";
 import { encryptProviderKey, type ProviderName } from "./providers";
 
 const corsHeaders: HeadersInit = {
@@ -115,13 +114,180 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // 1. CORS Preflight
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
-    // NOTE: Full file restored from local - this is a partial restore marker.
-    // Please push the complete local src/index.ts and public/index.html from your machine.
-    return json({ error: "Deploy incomplete - push remaining files from local" }, 503);
+    // 2. GitHub OAuth Endpoints
+    if (path === "/auth/github" && request.method === "GET") {
+      if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
+        return json({ error: "GITHUB_CLIENT_ID belum dikonfigurasi di Worker secrets." }, 500);
+      }
+      const state = createOAuthState();
+      const authUrl = getGitHubAuthorizeUrl(env, request, state);
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: authUrl,
+          "Set-Cookie": `github_oauth_state=${state}; Max-Age=600; Path=/auth/github; HttpOnly; Secure; SameSite=Lax`,
+        },
+      });
+    }
+
+    if (path === "/auth/github/callback" && request.method === "GET") {
+      const code = url.searchParams.get("code");
+      const state = url.searchParams.get("state");
+      const stateCookie = request.headers.get("Cookie")?.match(/(?:^|;\s*)github_oauth_state=([^;]+)/)?.[1];
+      const error = url.searchParams.get("error_description") || url.searchParams.get("error");
+
+      if (error) {
+        return Response.redirect(`${url.origin}/?error=${encodeURIComponent(error)}`, 302);
+      }
+      if (!code) {
+        return Response.redirect(`${url.origin}/?error=Kode+autentikasi+tidak+ditemukan`, 302);
+      }
+      if (!state || !stateCookie || state !== stateCookie) {
+        return Response.redirect(`${url.origin}/?error=OAuth+state+tidak+valid`, 302);
+      }
+
+      try {
+        const { token, user } = await handleGitHubOAuthCallback(env, request, code);
+        const authPayload = encodeURIComponent(
+          JSON.stringify({
+            token,
+            user: {
+              email: user.email,
+              name: user.name,
+              githubUsername: user.githubUsername,
+              avatarUrl: user.avatarUrl,
+            },
+          })
+        );
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: `${url.origin}/#auth=${authPayload}`,
+            "Set-Cookie": "github_oauth_state=; Max-Age=0; Path=/auth/github; HttpOnly; Secure; SameSite=Lax",
+          },
+        });
+      } catch (err: any) {
+        return Response.redirect(`${url.origin}/?error=${encodeURIComponent(err.message || "Gagal login dengan GitHub")}`, 302);
+      }
+    }
+
+    // 3. Manual Auth Endpoints
+    if (path === "/auth/register" && request.method === "POST") {
+      try {
+        const body = (await request.json().catch(() => ({}))) as any;
+        const email = (body.email || "").trim().toLowerCase();
+        const password = body.password || "";
+        const name = (body.name || "").trim() || email.split("@")[0];
+
+        if (!email || !email.includes("@")) return json({ error: "Email tidak valid" }, 400);
+        if (password.length < 6) return json({ error: "Password minimal 6 karakter" }, 400);
+
+        const existing = await getUserByEmail(env.DB, email);
+        if (existing) return json({ error: "Email sudah terdaftar" }, 409);
+
+        const { hash, salt } = await hashPassword(password);
+        const user = await createManualUser(env.DB, { email, name, passwordHash: hash, salt });
+        const token = await issueToken(env, { email: user.email, name: user.name });
+
+        return json({
+          token,
+          user: {
+            email: user.email,
+            name: user.name,
+            githubUsername: user.githubUsername,
+            avatarUrl: user.avatarUrl,
+          },
+        }, 201);
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal registrasi" }, 500);
+      }
+    }
+
+    if (path === "/auth/login" && request.method === "POST") {
+      try {
+        const body = (await request.json().catch(() => ({}))) as any;
+        const email = (body.email || "").trim().toLowerCase();
+        const password = body.password || "";
+
+        if (!email || !password) return json({ error: "Email dan password wajib diisi" }, 400);
+
+        const user = await getUserByEmail(env.DB, email);
+        if (!user || !user.passwordHash || !user.salt) {
+          return json({ error: "Email atau password salah" }, 401);
+        }
+
+        const valid = await verifyPassword(password, user.salt, user.passwordHash);
+        if (!valid) return json({ error: "Email atau password salah" }, 401);
+
+        const token = await issueToken(env, { email: user.email, name: user.name });
+        return json({
+          token,
+          user: {
+            email: user.email,
+            name: user.name,
+            githubUsername: user.githubUsername,
+            avatarUrl: user.avatarUrl,
+          },
+        });
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal login" }, 500);
+      }
+    }
+
+    if (path === "/auth/me" && request.method === "GET") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      return json({
+        user: {
+          email: user.email,
+          name: user.name,
+          githubUsername: user.githubUsername,
+          avatarUrl: user.avatarUrl,
+          hasGitHub: !!user.githubToken,
+        },
+      });
+    }
+
+    // NOTE: This is a partial restore of the previous known-good worker.
+    // Full free/pro/team billing UI + /api/billing/status live in local commit 15a041c.
+    // Please push local src/index.ts and public/index.html to complete the deploy.
+
+    if (path === "/api/usage" && request.method === "GET") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      return json({ usage: await getUsageState(env.DB, user.email) });
+    }
+
+    if (path === "/api/chat" && request.method === "POST") {
+      const user = await getAuthenticatedUser(request, env);
+      if (!user) return json({ error: "Unauthorized" }, 401);
+      try {
+        await consumeAiRequest(env.DB, user.email);
+      } catch (err: any) {
+        return json({ error: err.message || "Batas AI tercapai" }, 402);
+      }
+      const body = (await request.json().catch(() => ({}))) as { message?: string; history?: unknown[] };
+      const message = (body.message || "").trim();
+      if (!message) return json({ error: "Pesan wajib diisi" }, 400);
+      try {
+        const result = await processAgentMessage(env, user, message, body.history || []);
+        return json(result);
+      } catch (err: any) {
+        return json({ error: err.message || "Gagal memproses chat" }, 500);
+      }
+    }
+
+    // Static assets / SPA fallback
+    if (path === "/" || path === "/index.html" || !path.startsWith("/api") && !path.startsWith("/auth")) {
+      // Let asset binding or default worker handle static files
+    }
+
+    return json({ error: "Not found" }, 404);
   },
 } satisfies ExportedHandler<Env>;
 
