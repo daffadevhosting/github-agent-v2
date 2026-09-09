@@ -72,7 +72,15 @@ export async function runProvider(
 ): Promise<string> {
   if (config.provider === "workers-ai") {
     const result = await env.AI.run(config.model as any, { messages, max_tokens: maxTokens }) as any;
-    return String(result?.response || result?.result?.response || result?.text || "");
+    if (typeof result === "string" && result.trim()) return result;
+    if (typeof result?.response === "string" && result.response.trim()) return result.response;
+    if (typeof result?.result?.response === "string") return result.result.response;
+    if (typeof result?.output_text === "string") return result.output_text;
+    if (Array.isArray(result?.choices) && result.choices[0]?.message?.content) {
+      return String(result.choices[0].message.content);
+    }
+    if (typeof result?.text === "string") return result.text;
+    return "";
   }
 
   const endpoint = config.provider === "anthropic"
