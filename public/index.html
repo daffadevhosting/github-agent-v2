@@ -572,8 +572,34 @@
       flex-direction: column;
     }
 
-    .sidebar-views::-webkit-scrollbar { width: 4px; }
-    .sidebar-views::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    /* Unified dark scrollbars matching UI */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    *::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    *::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    *::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background-clip: padding-box;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background: #3f3f3f;
+      background-clip: padding-box;
+    }
+    *::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+
+    .sidebar-views::-webkit-scrollbar { width: 6px; }
+    .sidebar-views::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
 
     .repo-list {
       list-style: none;
@@ -873,22 +899,43 @@
 
     .usage-bar span { display: block; width: 32%; height: 100%; background: var(--accent); border-radius: inherit; }
 
-    #editor-panel .platform-card { height: min(820px, 94vh); }
+    /* Pro Monaco editor — fullscreen */
+    #editor-panel {
+      padding: 0;
+      align-items: stretch;
+      justify-content: stretch;
+      background: var(--bg);
+      backdrop-filter: none;
+    }
+    #editor-panel .platform-card {
+      width: 100%;
+      max-width: none;
+      height: 100%;
+      max-height: none;
+      border-radius: 0;
+      border: none;
+      box-shadow: none;
+    }
     .editor-toolbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      padding: 8px 12px;
+      padding: 10px 14px;
       border-bottom: 1px solid var(--border);
-      background: var(--bg);
+      background: var(--bg-elevated);
+      flex-shrink: 0;
     }
     .editor-toolbar-left, .editor-toolbar-right { display: flex; align-items: center; gap: 7px; }
     .editor-file-name { color: var(--text-secondary); font: 12px var(--font-code); }
-    #monaco-container { flex: 1; min-height: 320px; }
+    #monaco-container {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+    }
     .editor-diff {
       display: none;
-      max-height: 220px;
+      max-height: 28vh;
       overflow: auto;
       padding: 12px;
       border-top: 1px solid var(--border);
@@ -896,6 +943,7 @@
       color: var(--text-secondary);
       white-space: pre-wrap;
       font: 11px/1.5 var(--font-code);
+      flex-shrink: 0;
     }
     .editor-diff.open { display: block; }
     .diff-add { color: #7ee2bd; }
@@ -950,7 +998,7 @@
     }
 
     #messages::-webkit-scrollbar { width: 6px; }
-    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
 
     .msg-row {
       display: flex;
@@ -1736,15 +1784,13 @@
 
   <div class="platform-panel" id="editor-panel">
     <div class="platform-card">
-      <div class="platform-card-header">
-        <div>
-          <h2>Pro Code Editor</h2>
-          <p>Monaco Editor dengan syntax highlighting, AI fix, dan commit langsung ke branch.</p>
-        </div>
-        <button class="btn-icon" data-close-panel="editor-panel" type="button"><i data-lucide="x"></i></button>
-      </div>
       <div class="editor-toolbar">
-        <div class="editor-toolbar-left"><span class="editor-file-name" id="editor-file-name">Belum ada file</span></div>
+        <div class="editor-toolbar-left">
+          <button class="btn-icon" data-close-panel="editor-panel" type="button" title="Tutup editor" style="margin-right:4px;">
+            <i data-lucide="x"></i>
+          </button>
+          <span class="editor-file-name" id="editor-file-name">Belum ada file</span>
+        </div>
         <div class="editor-toolbar-right">
           <button class="platform-btn" id="editor-ai-fix" type="button"><i data-lucide="wand-sparkles"></i> AI Fix</button>
           <button class="platform-btn" id="editor-show-diff" type="button"><i data-lucide="git-compare"></i> Diff</button>
@@ -2011,6 +2057,9 @@
     }
 
     async function openCodeEditor(file, content) {
+      // Monaco hanya untuk Pro / Team
+      if (!requireFeature("pro_editor", "Pro Code Editor")) return;
+
       editorFile = file;
       editorOriginalContent = content || "";
       editorFileName.textContent = `${selectedRepo?.name || "repo"}/${file.path}`;
@@ -2018,14 +2067,17 @@
 
       const setupEditor = () => {
         if (monacoEditor) monacoEditor.dispose();
+        monacoContainer.innerHTML = "";
         monacoEditor = window.monaco.editor.create(monacoContainer, {
           value: editorOriginalContent,
           language: editorLanguage(file.path),
           theme: "vs-dark",
           automaticLayout: true,
-          minimap: { enabled: false },
+          minimap: { enabled: true },
           fontSize: 13,
           padding: { top: 12 },
+          wordWrap: "on",
+          scrollBeyondLastLine: false,
         });
       };
 
@@ -2365,10 +2417,13 @@
           lines.push(`- \`${f.path}\``);
         }
         lines.push("");
+        const proHint = (currentFeatures && currentFeatures.pro_editor)
+          ? "_Klik file di sidebar untuk membuka Pro Code Editor (fullscreen)._"
+          : "_Klik file di sidebar untuk memuat isinya ke chat (upgrade Pro untuk Monaco editor)._";
         if (total > maxShow) {
-          lines.push(`_…dan ${total - maxShow} file lainnya. Klik file di sidebar untuk memuat isinya ke chat._`);
+          lines.push(`_…dan ${total - maxShow} file lainnya. ${proHint.replace(/^_|_$/g, "")}_`);
         } else {
-          lines.push("_Klik file di sidebar untuk memuat isinya ke chat._");
+          lines.push(proHint);
         }
       }
       addMessage("system", lines.join("\n"));
@@ -2427,7 +2482,7 @@
         const branch = selectedBranch || getRepoBranch(selectedRepo);
         const res = await apiRequest(`/api/repos/${owner}/${selectedRepo.name}/file?path=${encodeURIComponent(file.path)}&branch=${encodeURIComponent(branch)}`);
         removeThinking();
-        
+
         const content = res.file?.content || "";
         setContext({
           type: "file",
@@ -2438,12 +2493,19 @@
         });
         file.sha = res.file?.sha || file.sha;
 
-        inputEl.value = `Tolong periksa dan review file \`${file.path}\` berikut:\n\n\`\`\`${file.lang || 'text'}\n${content}\n\`\`\`\n\nApa ada bug atau perbaikan performa yang disarankan?`;
-        inputEl.style.height = "auto";
-        inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
-        inputEl.focus();
-        updateSendState();
-        openCodeEditor(file, content);
+        const canUseProEditor = !!(currentFeatures && currentFeatures.pro_editor);
+
+        if (canUseProEditor) {
+          // Pro / Team: buka Monaco fullscreen, jangan tempel ke chat input
+          await openCodeEditor(file, content);
+        } else {
+          // Free: hanya tempel isi file ke input chat (tanpa Monaco)
+          inputEl.value = `Tolong periksa dan review file \`${file.path}\` berikut:\n\n\`\`\`${file.lang || "text"}\n${content}\n\`\`\`\n\nApa ada bug atau perbaikan performa yang disarankan?`;
+          inputEl.style.height = "auto";
+          inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
+          inputEl.focus();
+          updateSendState();
+        }
 
         if (window.innerWidth <= 768) {
           sidebar.classList.remove("open");
@@ -2596,7 +2658,7 @@
           ["Semantic code index", !!(features?.code_index ?? true)],
           ["External AI provider (BYOK)", !!(features?.external_provider)],
           ["Live collaboration", !!(features?.collaboration)],
-          ["Pro code editor", !!(features?.pro_editor ?? true)],
+          ["Pro code editor (Monaco)", !!(features?.pro_editor)],
         ];
         featureList.innerHTML = rows.map(([label, ok]) =>
           `<li style="color:${ok ? "var(--text-secondary)" : "var(--text-muted)"}">${ok ? "✓" : "✗"} ${label}</li>`

@@ -17,9 +17,9 @@ export const PLAN_LIMITS: Record<PlanName, { aiRequests: number; indexedRepos: n
   team: { aiRequests: 25000, indexedRepos: 100 },
 };
 
-/** Fitur per paket — free = fondasi, pro/team = realisasi penuh */
+/** Fitur per paket — free = chat only; pro/team = Monaco editor + full features */
 export const PLAN_FEATURES: Record<PlanName, PlanFeature[]> = {
-  free: ["chat", "github_basic", "code_index", "semantic_search", "pro_editor"],
+  free: ["chat", "github_basic", "code_index", "semantic_search"],
   pro: [
     "chat",
     "github_basic",
