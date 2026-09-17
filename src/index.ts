@@ -21,7 +21,7 @@ import { getGitHubAuthorizeUrl, createOAuthState, handleGitHubOAuthCallback } fr
 import { listUserRepositories, getRepoTree, getFile, createOrUpdateFile } from "./github";
 import { indexRepositoryFiles, searchRepository } from "./rag";
 import { CollaborationRoom } from "./collaboration";
-import { assertPlanFeature, createMidtransCheckout, getPlanPrice, PLAN_DURATION_MS, planAllows, verifyMidtransSignature } from "./billing";
+import { assertPlanFeature, createMidtransCheckout, getPlanPrice, PLAN_DURATION_MS, planAllows, verifyMidtransSignature, verifyRouterSecret } from "./billing";
 import { encryptProviderKey, type ProviderName } from "./providers";
 
 const corsHeaders: HeadersInit = {
@@ -726,6 +726,11 @@ export default {
     }
 
     if (path === "/api/billing/midtrans/webhook" && request.method === "POST") {
+      // 1. Verifikasi Header X-Router-Secret dari Worker Router
+      if (!verifyRouterSecret(request, env)) {
+        return json({ error: "Unauthorized request origin." }, 401);
+      }
+
       const body = (await request.json().catch(() => ({}))) as {
         order_id?: string;
         status_code?: string;
@@ -733,9 +738,11 @@ export default {
         signature_key?: string;
         transaction_status?: string;
       };
+
       if (!body.order_id || !body.status_code || !body.gross_amount || !body.signature_key) {
         return json({ error: "Payload Midtrans tidak lengkap." }, 400);
       }
+
       try {
         const valid = await verifyMidtransSignature(
           env,
@@ -761,7 +768,7 @@ export default {
             Date.now() + PLAN_DURATION_MS
           );
         } else if (status === "expire" || status === "deny" || status === "cancel") {
-          // Jangan downgrade paksa di sini kecuali order yang sama; expiry ditangani getUsageState
+          // Expiry ditangani getUsageState
         }
         return json({ accepted: true, transactionStatus: status });
       } catch (err: any) {

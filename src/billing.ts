@@ -80,6 +80,12 @@ export async function createMidtransCheckout(
   if (!env.MIDTRANS_SERVER_KEY) throw new Error("MIDTRANS_SERVER_KEY belum dikonfigurasi.");
   const price = getPlanPrice(input.plan, env);
   if (!Number.isInteger(price) || price <= 0) throw new Error("Harga paket Midtrans tidak valid.");
+
+  // Pastikan Order ID selalu diawali prefix GA- untuk diproses oleh Router
+  const formattedOrderId = input.orderId.startsWith("GA-") 
+    ? input.orderId 
+    : `GA-${input.orderId}`;
+
   const base = env.MIDTRANS_API_BASE || "https://app.sandbox.midtrans.com";
   const response = await fetch(`${base}/snap/v1/transactions`, {
     method: "POST",
@@ -89,7 +95,7 @@ export async function createMidtransCheckout(
       Accept: "application/json",
     },
     body: JSON.stringify({
-      transaction_details: { order_id: input.orderId, gross_amount: price },
+      transaction_details: { order_id: formattedOrderId, gross_amount: price },
       item_details: [
         {
           id: input.plan,
@@ -127,4 +133,14 @@ export async function verifyMidtransSignature(
     byte.toString(16).padStart(2, "0")
   ).join("");
   return expected === signature;
+}
+
+/**
+ * Memvalidasi apakah request callback dikirim via Router resmi
+ */
+export function verifyRouterSecret(request: Request, env: Env): boolean {
+  const routerSecret = (env as Env & { ROUTER_SECRET_TOKEN?: string }).ROUTER_SECRET_TOKEN;
+  if (!routerSecret) return true; // Opsional jika belum di-set di env
+  const secretHeader = request.headers.get("X-Router-Secret");
+  return secretHeader === routerSecret;
 }
