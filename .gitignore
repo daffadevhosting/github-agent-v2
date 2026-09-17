@@ -29,6 +29,7 @@ dist/
 build/
 coverage/
 .github/copilot-instructions.md
+AGENTS.md
 
 # Cloudflare / Wrangler
 .wrangler/

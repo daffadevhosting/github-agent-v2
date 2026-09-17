@@ -1,4 +1,4 @@
-import type { UserRecord, AgentState } from "./types";
+import type { UserRecord, AgentState, PendingConfirmation } from "./types";
 import type { PlanName, UsageState } from "./types";
 import { PLAN_LIMITS } from "./billing";
 
@@ -36,6 +36,11 @@ export async function ensurePlatformSchema(db: D1Database): Promise<void> {
         status TEXT NOT NULL DEFAULT 'pending',
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
+      )`).run();
+      await db.prepare(`CREATE TABLE IF NOT EXISTS pending_confirmations (
+        email TEXT PRIMARY KEY,
+        payload TEXT NOT NULL,
+        created_at INTEGER NOT NULL
       )`).run();
     })().catch((error) => {
       schemaReady = null;
@@ -385,6 +390,42 @@ export async function saveUserState(
     .run();
 
   return { currentRepo: updatedRepo, currentBranch: updatedBranch };
+}
+
+export async function getPendingConfirmation(
+  db: D1Database,
+  email: string
+): Promise<PendingConfirmation | null> {
+  await ensurePlatformSchema(db);
+  const row = await db.prepare(
+    "SELECT payload, created_at as createdAt FROM pending_confirmations WHERE email = ?"
+  ).bind(email.toLowerCase()).first<{ payload: string; createdAt: number }>();
+  if (!row) return null;
+  try {
+    return { ...JSON.parse(row.payload), createdAt: Number(row.createdAt) } as PendingConfirmation;
+  } catch {
+    await clearPendingConfirmation(db, email);
+    return null;
+  }
+}
+
+export async function savePendingConfirmation(
+  db: D1Database,
+  email: string,
+  pending: Omit<PendingConfirmation, "createdAt">
+): Promise<void> {
+  await ensurePlatformSchema(db);
+  const createdAt = Date.now();
+  await db.prepare(
+    `INSERT INTO pending_confirmations (email, payload, created_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(email) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at`
+  ).bind(email.toLowerCase(), JSON.stringify({ ...pending, createdAt }), createdAt).run();
+}
+
+export async function clearPendingConfirmation(db: D1Database, email: string): Promise<void> {
+  await ensurePlatformSchema(db);
+  await db.prepare("DELETE FROM pending_confirmations WHERE email = ?").bind(email.toLowerCase()).run();
 }
 
 /**

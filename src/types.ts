@@ -52,6 +52,14 @@ export interface AgentState {
   currentBranch: string;
 }
 
+export interface PendingConfirmation {
+  intent: string;
+  params: Record<string, any>;
+  currentRepo: string;
+  currentBranch: string;
+  createdAt: number;
+}
+
 export interface UserRecord {
   id: string;
   email: string;

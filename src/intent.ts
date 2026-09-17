@@ -374,12 +374,16 @@ function ruleDetectIntent(userMessage: string): IntentResult | null {
     }
   }
 
-  // Setup branch
-  if (/(?:setup|persiapkan|siapkan|checkout|pindah|switch)\s+branch/i.test(lower)) {
+  // Setup repository or branch
+  if (/(?:setup|persiapkan|siapkan|checkout|pindah|switch)\s+(?:branch|repo|repository|repositori)/i.test(lower)) {
     const branchMatch = t.match(/(?:ke|menuju|to|dari|from)\s+([a-zA-Z0-9_\-./]+)/i);
+    const repoMatch = t.match(/(?:repo(?:sitori)?|repository)\s+([a-zA-Z0-9_\-./]+)/i);
     return {
       intent: "setup_branch",
-      params: { branch: branchMatch ? branchMatch[1] : "main" },
+      params: {
+        repo: repoMatch ? repoMatch[1] : undefined,
+        branch: branchMatch ? branchMatch[1] : "main",
+      },
       confidence: "rule",
     };
   }

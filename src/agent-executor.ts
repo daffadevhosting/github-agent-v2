@@ -1,13 +1,79 @@
 import { tracing } from "cloudflare:workers";
-import type { Env, AgentState, UserRecord } from "./types";
+import type { Env, AgentState, UserRecord, PendingConfirmation } from "./types";
 import { detectIntent, type IntentResult, AGENT_NAME, AGENT_ID, extractText } from "./intent";
 import * as github from "./github";
-import { getUserState, saveUserState, logChatMessage, getUserByEmail, getProviderSettings } from "./db";
+import {
+  getUserState,
+  saveUserState,
+  logChatMessage,
+  getUserByEmail,
+  getProviderSettings,
+  getPendingConfirmation,
+  savePendingConfirmation,
+  clearPendingConfirmation,
+} from "./db";
 import { searchDuckDuckGo } from "./search";
 import { buildRepositoryContext } from "./rag";
 import { decryptProviderKey, resolveProvider, runProvider, type ProviderName } from "./providers";
 
 const MODEL = "@cf/openai/gpt-oss-120b";
+
+type ConfirmationAnswer = "yes" | "no" | null;
+
+function parseConfirmation(message: string): ConfirmationAnswer {
+  const normalized = message.trim().toLowerCase().replace(/[.!?]+$/, "");
+  if (/^(ya|y|iya|lanjut|setuju|konfirmasi|confirm|yes|oke|ok)$/.test(normalized)) return "yes";
+  if (/^(tidak|t|nggak|enggak|batal|batalkan|cancel|no)$/.test(normalized)) return "no";
+  return null;
+}
+
+function requiresConfirmation(intent: string): boolean {
+  return new Set([
+    "create_repo",
+    "setup_branch",
+    "create_branch",
+    "delete_branch",
+    "create_file",
+    "edit_file",
+    "delete_file",
+    "create_pr",
+    "merge_pr",
+    "create_issue",
+    "close_issue",
+    "comment_issue",
+  ]).has(intent);
+}
+
+function confirmationSummary(pending: Pick<PendingConfirmation, "intent" | "params" | "currentRepo" | "currentBranch">): string {
+  const params = pending.params || {};
+  const labels: Record<string, string> = {
+    create_repo: "membuat repositori",
+    setup_branch: "mengatur repo/branch aktif",
+    create_branch: "membuat branch",
+    delete_branch: "menghapus branch",
+    create_file: "membuat file",
+    edit_file: "mengubah file",
+    delete_file: "menghapus file",
+    create_pr: "membuat Pull Request",
+    merge_pr: "merge Pull Request",
+    create_issue: "membuat issue",
+    close_issue: "menutup issue",
+    comment_issue: "menambahkan komentar issue",
+  };
+  const action = labels[pending.intent] || pending.intent;
+  const details: string[] = [];
+  const repo = params.name || pending.currentRepo;
+  if (repo) details.push(`Repo: **${repo}**`);
+  if (pending.currentBranch) details.push(`Branch aktif: **${pending.currentBranch}**`);
+  if (params.branch) details.push(`Branch target: **${params.branch}**`);
+  if (params.from) details.push(`Dari: **${params.from}**`);
+  if (params.path) details.push(`File: **${params.path}**`);
+  if (Array.isArray(params.paths) && params.paths.length > 1) details.push(`File: **${params.paths.join(", ")}**`);
+  if (params.title) details.push(`Judul: **${params.title}**`);
+  if (params.number) details.push(`Nomor: **#${params.number}**`);
+  if (params.head || params.base) details.push(`Branch PR: **${params.head || pending.currentBranch}** → **${params.base || "main"}**`);
+  return `AI akan **${action}**${details.length ? ` dengan detail berikut:\n${details.map((detail) => `- ${detail}`).join("\n")}` : "."}`;
+}
 
 export async function processAgentMessage(
   env: Env,
@@ -37,15 +103,33 @@ export async function processAgentMessage(
     let reply = "";
 
     try {
-      const intent = await detectIntent(env, trimmed, state.currentRepo, conversationId);
-      const result = await executeIntent(
-        env,
-        userRecord,
-        intent,
-        trimmed,
-        state,
-        conversationId
-      );
+      const pending = await getPendingConfirmation(env.DB, userEmail);
+      const confirmation = pending ? parseConfirmation(trimmed) : null;
+      let result: { reply: string; state: AgentState };
+
+      if (pending && confirmation === "yes") {
+        await clearPendingConfirmation(env.DB, userEmail);
+        result = await executeIntent(
+          env,
+          userRecord,
+          { intent: pending.intent as any, params: pending.params, confidence: "rule" },
+          trimmed,
+          { currentRepo: pending.currentRepo, currentBranch: pending.currentBranch },
+          conversationId,
+          true
+        );
+      } else if (pending && confirmation === "no") {
+        await clearPendingConfirmation(env.DB, userEmail);
+        result = { reply: "❎ Aksi dibatalkan. Tidak ada perubahan yang dilakukan.", state };
+      } else if (pending) {
+        result = {
+          reply: `⚠️ Ada aksi yang menunggu konfirmasi:\n\n${confirmationSummary(pending)}\n\nJawab **ya** untuk melanjutkan atau **tidak** untuk membatalkan.`,
+          state,
+        };
+      } else {
+        const intent = await detectIntent(env, trimmed, state.currentRepo, conversationId);
+        result = await executeIntent(env, userRecord, intent, trimmed, state, conversationId);
+      }
       reply = result.reply;
       state = result.state;
     } catch (err: any) {
@@ -63,7 +147,8 @@ async function executeIntent(
   intent: IntentResult | null | undefined,
   rawText: string,
   state: AgentState,
-  conversationId: string = "default-session"
+  conversationId: string = "default-session",
+  confirmed = false
 ): Promise<{ reply: string; state: AgentState }> {
   if (!intent || typeof intent.intent !== "string") {
     throw new Error("Intent perintah tidak dapat ditentukan. Silakan coba lagi.");
@@ -92,6 +177,20 @@ async function executeIntent(
   if (githubActions.includes(intent.intent) && !ghToken) {
     return {
       reply: `⚠️ **Akun GitHub Belum Terhubung**\n\nUntuk membuat repositori, mengelola file, PR, atau issue di akun GitHub kamu, silakan klik tombol **"Hubungkan GitHub"** di bagian atas atau login menggunakan akun GitHub.\n\n*Kamu tetap bisa bertanya konsep coding, pembuatan skrip, atau bantuan pemrograman lainnya.*`,
+      state,
+    };
+  }
+
+  if (!confirmed && requiresConfirmation(intent.intent)) {
+    const pending: Omit<PendingConfirmation, "createdAt"> = {
+      intent: intent.intent,
+      params: intent.params,
+      currentRepo,
+      currentBranch,
+    };
+    await savePendingConfirmation(env.DB, userEmail, pending);
+    return {
+      reply: `🔐 **Konfirmasi diperlukan**\n\n${confirmationSummary(pending)}\n\nJawab **ya** untuk melanjutkan atau **tidak** untuk membatalkan.`,
       state,
     };
   }
